@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --surface-2: #f1f0ed;
+  --border: #e3e2dc;
+  --text: #0f0f0e;
+  --text-2: #52514e;
+  --muted: #898781;
+  --accent: #1c5cab;
+  --accent-hover: #184f95;
+  --accent-soft: #e6effb;
+  --accent-fg: #ffffff;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --good-soft: #e5f4e5;
+  --warn: #fab219;
+  --warn-text: #8a5a00;
+  --warn-soft: #fdf3dc;
+  --bad: #d03b3b;
+  --bad-text: #b02a2a;
+  --bad-soft: #fbe9e9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232322;
+    --border: #2f2f2d;
+    --text: #f5f5f3;
+    --text-2: #c3c2b7;
+    --muted: #898781;
+    --accent: #3987e5;
+    --accent-hover: #5598e7;
+    --accent-soft: #15253a;
+    --accent-fg: #ffffff;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --good: #0ca30c;
+    --good-text: #3fc23f;
+    --good-soft: #13261a;
+    --warn: #fab219;
+    --warn-text: #f5c04a;
+    --warn-soft: #2c2410;
+    --bad: #d03b3b;
+    --bad-text: #ef7373;
+    --bad-soft: #2e1616;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #232322;
+  --border: #2f2f2d;
+  --text: #f5f5f3;
+  --text-2: #c3c2b7;
+  --muted: #898781;
+  --accent: #3987e5;
+  --accent-hover: #5598e7;
+  --accent-soft: #15253a;
+  --accent-fg: #ffffff;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --good-text: #3fc23f;
+  --good-soft: #13261a;
+  --warn-text: #f5c04a;
+  --warn-soft: #2c2410;
+  --bad-text: #ef7373;
+  --bad-soft: #2e1616;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-good: var(--good);
+  --color-good-text: var(--good-text);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-text: var(--bad-text);
+  --color-bad-soft: var(--bad-soft);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS zooms into inputs below 16px – keep form controls at 16px on phones. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
