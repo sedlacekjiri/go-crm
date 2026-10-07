@@ -1,8 +1,9 @@
-// Kanban: New → Contacted → In talks → Accepted / Declined. Cards move with ← → (works on phones).
+// Kanban for walking in: To visit → Visited → Interested → Partner / Declined.
+// Cards move with ← → (works on phones). "To visit" is grouped by area to plan a route.
 import { followUpPill, interestBadge, kpi, pageHeader } from '../components.js';
-import { PARTNER_TYPES, STAGES } from '../lib.js';
+import { PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
-import { esc, options, toast } from '../util.js';
+import { esc, options, shortDate, toast } from '../util.js';
 
 let typeFilter = '';
 
@@ -13,6 +14,7 @@ export function render(page, { refresh }) {
   const reached = partners.length - count('new');
   const admin = isAdmin();
   const order = STAGES.map((s) => s.value);
+  const visits = visitStats(state.activities);
 
   page.innerHTML = `
     ${pageHeader(
@@ -21,16 +23,20 @@ export function render(page, { refresh }) {
       `<select class="input" data-type aria-label="Partner type" style="width:auto">${options(PARTNER_TYPES, typeFilter, { empty: 'All types' })}</select>`
     )}
     <div class="kpis">
-      ${kpi('In pipeline', partners.length, `${count('new')} not visited yet`)}
-      ${kpi('Reached', reached, partners.length ? `${Math.round((reached / partners.length) * 100)} % of the list` : '–')}
-      ${kpi('Partners', count('accepted'), `${count('in_talks')} in talks`)}
-      ${kpi('Win rate', decided ? `${Math.round((count('accepted') / decided) * 100)} %` : '–', `${count('accepted')} accepted / ${count('declined')} declined`)}
+      ${kpi('On the list', partners.length, `${count('new')} still to visit`)}
+      ${kpi('Visited', reached, partners.length ? `${Math.round((reached / partners.length) * 100)} % of the list` : '–')}
+      ${kpi('Partners', count('accepted'), `${count('in_talks')} interested`)}
+      ${kpi('Win rate', decided ? `${Math.round((count('accepted') / decided) * 100)} %` : '–', `${count('accepted')} partners / ${count('declined')} declined`)}
     </div>
     <div class="board">
       ${STAGES.map((s) => {
         const items = partners
           .filter((p) => p.stage === s.value)
-          .sort((a, b) => (b.interest ?? 0) - (a.interest ?? 0) || (a.next_follow_up ?? '9999').localeCompare(b.next_follow_up ?? '9999'));
+          .sort((a, b) =>
+            s.value === 'new'
+              ? (a.area ?? '~').localeCompare(b.area ?? '~') || a.name.localeCompare(b.name)
+              : (b.interest ?? 0) - (a.interest ?? 0) || (a.next_follow_up ?? '9999').localeCompare(b.next_follow_up ?? '9999')
+          );
         return `<section class="col">
           <div class="col-head"><h3>${s.label}</h3><span class="muted small num">${items.length}</span></div>
           <div class="col-hint">${s.hint}</div>
@@ -40,6 +46,7 @@ export function render(page, { refresh }) {
                 <a href="#/partner/${p.id}">
                   <div class="name">${esc(p.name)}</div>
                   <div class="meta">${esc([p.area?.replace(/\s*\(.*\)/, ''), p.rooms ? `${p.rooms} rooms` : null].filter(Boolean).join(' · ') || ' ')}</div>
+                  ${visits.get(p.id) ? `<div class="meta">${visits.get(p.id).count}× visited · last ${shortDate(visits.get(p.id).last)}</div>` : ''}
                   <div class="tags">${interestBadge(p.interest)}${['new', 'contacted', 'in_talks'].includes(s.value) && p.next_follow_up ? followUpPill(p.next_follow_up) : ''}</div>
                 </a>
                 ${

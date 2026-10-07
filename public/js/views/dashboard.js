@@ -58,7 +58,7 @@ export async function render(page, { isCurrent }) {
     </header>
 
     <div class="kpis">
-      ${kpi('Active partners', count('accepted'), `${count('in_talks')} in talks · ${count('new')} to visit`)}
+      ${kpi('Active partners', count('accepted'), `${count('in_talks')} interested · ${count('new')} to visit`)}
       ${kpi('Partner revenue · 30 days', money(p30.revenue, cur), `${p30.bookings} bookings`)}
       ${kpi('Share of all sales · 30 days', pct(p30.revenue, all30.revenue), all30.revenue ? `of ${money(all30.revenue, cur)}` : 'no sales imported yet')}
       ${kpi(`Visits · ${monthLabel(month).split(' ')[0]}`, actual.visits, target.visits !== undefined ? `target ${num(target.visits)}` : 'visits + meetings')}

@@ -15,8 +15,8 @@
       if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     } catch (e) {}
   </script>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,7 +27,7 @@
   <!-- Login -->
   <div id="loginView" class="login hidden">
     <form id="loginForm">
-      <div class="logo"><b>Go</b> CRM</div>
+      <div class="logo"><img src="/logo.png" alt="Go" /><span>CRM · Reykjavík</span></div>
       <h1>Partner CRM</h1>
       <p>Go Car Rentals &amp; Go Campers · Reykjavík office</p>
       <input class="input" type="password" id="password" placeholder="Password" autocomplete="current-password" required />
@@ -40,7 +40,7 @@
   <!-- App -->
   <div id="appView" class="app hidden">
     <aside class="sidebar">
-      <a class="logo" href="#/"><b>Go</b> CRM <span>Reykjavík</span></a>
+      <a class="logo" href="#/"><img src="/logo.png" alt="Go" /><span>CRM · Reykjavík</span></a>
       <nav class="nav" id="nav" aria-label="Sections"></nav>
       <div class="sidebar-foot">
         <div class="side-note" id="roleNote"></div>
@@ -50,7 +50,7 @@
     </aside>
     <main>
       <div class="mobile-top">
-        <a class="logo" href="#/"><b>Go</b> CRM</a>
+        <a class="logo" href="#/"><img src="/logo.png" alt="Go" /><span>CRM</span></a>
         <div class="mobile-top-actions">
           <div class="seg currency-seg"></div>
           <button class="icon-btn round" type="button" data-action="menu" aria-label="Menu">

@@ -1,6 +1,6 @@
 // Partner list with type tabs, search, area / stage filters and bulk add.
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
-import { AREAS, PARTNER_TYPES, STAGES } from '../lib.js';
+import { AREAS, PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, openModal, options, shortDate, toast } from '../util.js';
 
@@ -12,6 +12,7 @@ export function render(page, { query, refresh }) {
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
   const lastContact = new Map();
   for (const a of state.activities) if (!lastContact.has(a.partner_id)) lastContact.set(a.partner_id, a.happened_at);
+  const visits = visitStats(state.activities);
   const count = (pred) => state.partners.filter(pred).length;
 
   page.innerHTML = `
@@ -30,7 +31,7 @@ export function render(page, { query, refresh }) {
         [
           { value: 'name', label: 'Sort: Name' },
           { value: 'follow_up', label: 'Sort: Next follow-up' },
-          { value: 'last_activity', label: 'Sort: Last contact' },
+          { value: 'last_activity', label: 'Sort: Last visit / contact' },
           { value: 'rooms', label: 'Sort: Rooms' },
         ],
         filters.sort
@@ -65,8 +66,8 @@ export function render(page, { query, refresh }) {
     page.querySelector('#list').innerHTML = rows.length
       ? `<div class="plist">${rows
           .map((p) => {
-            const last = lastContact.get(p.id);
-            const meta = [p.area, p.rooms ? `${p.rooms} rooms` : null, last ? `last contact ${shortDate(last)}` : 'never contacted'].filter(Boolean).join(' · ');
+            const v = visits.get(p.id);
+            const meta = [p.area, p.rooms ? `${p.rooms} rooms` : null, v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
             return `<a class="prow" href="#/partner/${p.id}">
               <div class="main"><div class="name"><span>${esc(p.name)}</span>${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
               <div class="tags">${stageBadge(p.stage)}${interestBadge(p.interest)}${

@@ -16,6 +16,7 @@ import {
   revenueSeries,
   shiftMonth,
   totals,
+  visitStats,
   weekStart,
 } from '../public/js/lib.js';
 
@@ -182,5 +183,18 @@ describe('goals', () => {
       { booking_date: '2026-10-02', affiliate_code: null, amount_eur: 900, is_cancelled: false },
     ];
     assert.deepEqual(actuals('2026-10', { partners, activities, sales }), { visits: 2, new_partners: 1, bookings: 1, revenue_eur: 500 });
+  });
+});
+
+describe('visitStats', () => {
+  it('counts visits and meetings per partner with the latest date', () => {
+    const stats = visitStats([
+      { partner_id: 'a', type: 'visit', happened_at: '2026-10-01T10:00:00.000Z' },
+      { partner_id: 'a', type: 'meeting', happened_at: '2026-10-05T10:00:00.000Z' },
+      { partner_id: 'a', type: 'call', happened_at: '2026-10-06T10:00:00.000Z' },
+      { partner_id: 'b', type: 'email', happened_at: '2026-10-06T10:00:00.000Z' },
+    ]);
+    assert.deepEqual(stats.get('a'), { count: 2, last: '2026-10-05T10:00:00.000Z' });
+    assert.equal(stats.has('b'), false);
   });
 });

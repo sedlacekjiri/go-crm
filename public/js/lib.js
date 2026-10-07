@@ -10,14 +10,39 @@ export const PARTNER_TYPES = [
   { value: 'other', label: 'Other', singular: 'Other' },
 ];
 
-// Pipeline for in-person outreach. Interest (cold / warm / hot) is tracked separately.
+// Pipeline for walking in (almost all outreach is in person). The stored values stay
+// the same; only the wording follows the visits. Interest (cold / warm / hot) is separate.
 export const STAGES = [
-  { value: 'new', label: 'New', hint: 'On the list, not visited yet' },
-  { value: 'contacted', label: 'Contacted', hint: 'Visited / first talk done' },
-  { value: 'in_talks', label: 'In talks', hint: 'Interested, waiting for decision' },
-  { value: 'accepted', label: 'Accepted', hint: 'Partner – has affiliate link' },
+  { value: 'new', label: 'To visit', hint: 'Not visited yet' },
+  { value: 'contacted', label: 'Visited', hint: '1st visit done – info / flyers left' },
+  { value: 'in_talks', label: 'Interested', hint: 'Wants it – visit again / meet the manager' },
+  { value: 'accepted', label: 'Partner', hint: 'Agreed – affiliate link + materials' },
   { value: 'declined', label: 'Declined', hint: 'Said no (for now)' },
 ];
+
+// One-tap results of a visit, added to the visit note.
+export const VISIT_OUTCOMES = [
+  'Met the manager',
+  'Talked to reception',
+  'Left flyers',
+  'Placed QR stand',
+  'Manager not in – come back',
+  'Wants commission terms',
+  'Already works with another rental',
+];
+
+// Visits + meetings per partner, newest first: Map(partnerId → { count, last }).
+export function visitStats(activities) {
+  const out = new Map();
+  for (const a of activities) {
+    if (a.type !== 'visit' && a.type !== 'meeting') continue;
+    const s = out.get(a.partner_id) ?? { count: 0, last: null };
+    s.count += 1;
+    if (!s.last || a.happened_at > s.last) s.last = a.happened_at;
+    out.set(a.partner_id, s);
+  }
+  return out;
+}
 
 export const INTEREST = [
   { value: 1, label: 'Cold' },

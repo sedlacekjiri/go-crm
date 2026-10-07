@@ -1,6 +1,6 @@
 // One partner: pipeline controls, quick visit logging, contacts, activity log, affiliate results.
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
-import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, saleValue, shiftDate, STAGES, today, totals, typeLabel } from '../lib.js';
+import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
 import { copyText, dateTime, esc, formData, fullDate, money, nowLocalInput, openModal, options, shortDate, toast } from '../util.js';
 
@@ -19,6 +19,7 @@ export async function render(page, { params, refresh, isCurrent }) {
   }
   const contacts = state.contacts.filter((c) => c.partner_id === p.id);
   const activities = state.activities.filter((a) => a.partner_id === p.id);
+  const visits = visitStats(activities).get(p.id);
   const admin = isAdmin();
   const cur = currency.value;
   const open = !['accepted', 'declined'].includes(p.stage);
@@ -28,7 +29,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     <div class="detail-head">
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
-        <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}
+        <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}
           <span class="muted small">${esc([typeLabel(p.type), p.area, p.rooms ? `${p.rooms} rooms` : null, p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>
@@ -206,13 +207,14 @@ async function renderPerformance(page, p, cur, isCurrent) {
 function logActivity(p, contacts, refresh) {
   const nextStage = p.stage === 'new' ? 'contacted' : p.stage;
   const m = openModal(
-    `Log – ${p.name}`,
+    `Log visit – ${p.name}`,
     `<form>
       <div class="chips" data-type>${ACTIVITY_TYPES.map((t, i) => `<button type="button" data-v="${t.value}" aria-pressed="${i === 0}">${t.label}</button>`).join('')}</div>
       <div class="form-grid">
         <label class="field"><span>When</span><input class="input" type="datetime-local" name="when" value="${nowLocalInput()}" required /></label>
         <label class="field"><span>With</span><select class="input" name="contact_id">${options(contacts.map((c) => ({ value: c.id, label: c.name })), '', { empty: '–' })}</select></label>
       </div>
+      <div class="chips wrap-chips" data-outcomes>${VISIT_OUTCOMES.map((o) => `<button type="button" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>
       <label class="field"><span>What happened</span><textarea class="input" name="summary" rows="4" placeholder="Talked to the front office manager, left flyers, she will ask the GM…"></textarea></label>
       <div class="form-grid">
         <label class="field"><span>Stage after this</span><select class="input" name="stage">${options(STAGES, nextStage)}</select></label>
@@ -229,6 +231,15 @@ function logActivity(p, contacts, refresh) {
     if (!b) return;
     type = b.dataset.v;
     m.el.querySelectorAll('[data-type] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  m.el.querySelector('[data-outcomes]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-o]');
+    if (!b) return;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    const lines = form.summary.value.split('\n').filter((l) => l.trim() && l.trim() !== b.dataset.o);
+    if (on) lines.unshift(b.dataset.o);
+    form.summary.value = lines.join('\n');
   });
   m.el.querySelectorAll('[data-days]').forEach((b) => b.addEventListener('click', () => (form.next_follow_up.value = shiftDate(today(), Number(b.dataset.days)))));
   form.addEventListener('submit', async (e) => {
