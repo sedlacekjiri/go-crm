@@ -12,15 +12,19 @@ import * as partners from './views/partners.js';
 import * as pipeline from './views/pipeline.js';
 import * as sales from './views/sales.js';
 import * as tasks from './views/tasks.js';
+import * as marketing from './views/marketing.js';
 
 const NAV = [
   { href: '#/', key: 'home', label: 'Home', icon: ICONS.home },
   { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners },
   { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks },
+  { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing },
   { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline },
   { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales },
   { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals },
 ];
+
+const TABS = ['home', 'partners', 'tasks', 'marketing'];
 
 const ROUTES = [
   { re: /^\/$/, nav: 'home', view: dashboard },
@@ -29,6 +33,7 @@ const ROUTES = [
   { re: /^\/partner\/([\w-]+)$/, nav: 'partners', view: partner },
   { re: /^\/partner\/([\w-]+)\/edit$/, nav: 'partners', view: partnerForm },
   { re: /^\/tasks$/, nav: 'tasks', view: tasks },
+  { re: /^\/marketing$/, nav: 'marketing', view: marketing },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },
@@ -72,6 +77,7 @@ export async function refresh() {
 
 function highlightNav(key) {
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === key));
+  document.querySelector('#tabbar [data-nav="more"]')?.classList.toggle('active', !TABS.includes(key));
 }
 
 function updateBadges() {
@@ -86,7 +92,10 @@ function buildNav() {
   const item = (n) =>
     `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
   $('#nav').innerHTML = NAV.map(item).join('');
-  $('#tabbar').innerHTML = NAV.map(item).join('');
+  // Phones: the four most used sections as tabs, the rest under "More".
+  $('#tabbar').innerHTML =
+    NAV.filter((n) => TABS.includes(n.key)).map(item).join('') +
+    `<a href="#" data-action="more" data-nav="more">${ICONS.more}<span>More</span></a>`;
   $('#roleNote').textContent = isAdmin() ? 'Admin' : 'View only';
   renderCurrencySwitch();
 }
@@ -111,6 +120,29 @@ document.addEventListener('click', (e) => {
     return;
   }
   const action = e.target.closest('[data-action]')?.dataset.action;
+  if (action === 'more') {
+    e.preventDefault();
+    const m = openModal(
+      'More',
+      `<nav class="sheet-nav">${NAV.filter((n) => !TABS.includes(n.key))
+        .map((n) => `<a href="${n.href}">${n.icon}<span>${n.label}</span></a>`)
+        .join('')}</nav>
+       <div class="stack" style="margin-top:12px">
+         <p class="muted small">${isAdmin() ? 'Admin – full access' : 'View only'}${currency.rate ? ` · 1 € = ${currency.rate.toFixed(1)} kr` : ''}</p>
+         <button class="btn secondary block" data-m="theme">Switch light / dark</button>
+         <button class="btn secondary block" data-m="logout">Log out</button>
+       </div>`
+    );
+    m.el.addEventListener('click', (ev) => {
+      if (ev.target.closest('a')) return m.close();
+      const b = ev.target.closest('[data-m]');
+      if (!b) return;
+      m.close();
+      if (b.dataset.m === 'theme') toggleTheme();
+      else logout();
+    });
+    return;
+  }
   if (action === 'theme') toggleTheme();
   if (action === 'logout') logout();
   if (action === 'menu') {

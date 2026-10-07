@@ -25,7 +25,8 @@ const FIELDS = {
 };
 
 // Applies the allowed fields from body onto a partner row (used by activities.js too).
-export async function savePartner(db, body) {
+// options.visitLogged: the caller has just logged the visit itself (activities.js).
+export async function savePartner(db, body, { visitLogged = false } = {}) {
   const existing = body.id ? await db.prepare('SELECT * FROM partners WHERE id = ?').bind(body.id).first() : null;
   if (body.id && !existing) return { error: 'Partner not found', status: 404 };
   const row = existing ? { ...existing } : { id: uuid(), created_at: now(), stage: 'new', type: 'hotel' };
@@ -52,5 +53,25 @@ export async function savePartner(db, body) {
     )
     .bind(...cols.map((c) => row[c] ?? null))
     .run();
+
+  // Leaving "To visit" means you've been there: record a visit (unless one is already logged
+  // today), so it counts in Goals and the visit history, and tick off any planned visit.
+  if (!visitLogged && (!existing || existing.stage === 'new') && row.stage !== 'new') await recordVisit(db, row.id);
   return { partner: row };
+}
+
+export async function recordVisit(db, partnerId) {
+  const day = now().slice(0, 10);
+  const already = await db
+    .prepare(`SELECT 1 FROM activities WHERE partner_id = ? AND type IN ('visit', 'meeting') AND substr(happened_at, 1, 10) = ?`)
+    .bind(partnerId, day)
+    .first();
+  if (already) return;
+  const t = now();
+  await db.batch([
+    db
+      .prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'visit', ?, 'Marked as visited', ?)`)
+      .bind(uuid(), partnerId, t, t),
+    db.prepare(`UPDATE tasks SET done = 1, done_at = ? WHERE partner_id = ? AND type = 'visit' AND done = 0 AND due_date <= ?`).bind(t, partnerId, day),
+  ]);
 }

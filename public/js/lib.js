@@ -84,8 +84,77 @@ export const BRANDS = [
   { value: 'camper', label: 'Go Campers' },
 ];
 
+export const TASK_CATEGORIES = [
+  { value: 'sales', label: 'Sales' },
+  { value: 'marketing', label: 'Marketing' },
+];
+
+// ── Marketing ──────────────────────────────────────────────────
+export const CHANNELS = [
+  { value: 'instagram', label: 'Instagram', short: 'IG' },
+  { value: 'facebook', label: 'Facebook', short: 'FB' },
+  { value: 'tiktok', label: 'TikTok', short: 'TT' },
+  { value: 'google', label: 'Google', short: 'G' },
+  { value: 'youtube', label: 'YouTube', short: 'YT' },
+];
+
+export const FORMATS = [
+  { value: 'reel', label: 'Reel / Video' },
+  { value: 'post', label: 'Photo post' },
+  { value: 'carousel', label: 'Carousel' },
+  { value: 'story', label: 'Story' },
+];
+
+export const POST_STATUSES = [
+  { value: 'idea', label: 'Idea' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'published', label: 'Published' },
+];
+
+export const POST_BRANDS = [
+  { value: 'car', label: 'Go Car Rentals' },
+  { value: 'camper', label: 'Go Campers' },
+  { value: 'both', label: 'Both' },
+];
+
+// Iceland is seasonal – these tags keep the idea bank easy to browse.
+export const THEMES = [
+  'Northern lights',
+  'Winter driving',
+  'Summer road trip',
+  'F-roads & highlands',
+  'Camper life',
+  'Driving tips & safety',
+  'Customer photos',
+  'Hotel partner',
+  'Behind the scenes',
+  'Offer / promo',
+];
+
+export const channelLabel = (c) => find(CHANNELS, c)?.label ?? c;
+export const postStatusLabel = (s) => find(POST_STATUSES, s)?.label ?? s;
+
+// Star counts 1–5 and average of collected reviews.
+export function reviewStats(reviews, sinceIso = null) {
+  const list = sinceIso ? reviews.filter((r) => (r.published_at ?? '') >= sinceIso) : reviews;
+  const stars = [0, 0, 0, 0, 0];
+  for (const r of list) if (r.rating >= 1 && r.rating <= 5) stars[r.rating - 1] += 1;
+  const n = stars.reduce((a, b) => a + b, 0);
+  return { count: n, stars, average: n ? stars.reduce((sum, c, i) => sum + c * (i + 1), 0) / n : null };
+}
+
+// Reviews gained between the first and last snapshot in the list (rating count difference).
+export function reviewGrowth(snapshots) {
+  if (snapshots.length < 2) return null;
+  const first = snapshots[0];
+  const last = snapshots.at(-1);
+  return { gained: (last.rating_count ?? 0) - (first.rating_count ?? 0), from: first.day, to: last.day, ratingChange: (last.rating ?? 0) - (first.rating ?? 0) };
+}
+
 export const GOAL_METRICS = [
   { value: 'visits', label: 'Visits & meetings', unit: '' },
+  { value: 'hotels_visited', label: 'Hotels visited (first time)', unit: '' },
   { value: 'new_partners', label: 'New partners', unit: '' },
   { value: 'bookings', label: 'Partner bookings', unit: '' },
   { value: 'revenue_eur', label: 'Partner revenue', unit: 'EUR' },
@@ -417,8 +486,16 @@ const localMonth = (ts) => today(new Date(ts)).slice(0, 7);
 export function actuals(month, { activities, partners, sales }) {
   const byCode = partnerByCode(partners);
   const partnerSales = activeSales(sales).filter((s) => monthOf(s.booking_date) === month && isPartnerSale(s, byCode));
+  // First visit per partner – "hotels reached" that month.
+  const firstVisit = new Map();
+  for (const a of activities) {
+    if (a.type !== 'visit' && a.type !== 'meeting') continue;
+    const prev = firstVisit.get(a.partner_id);
+    if (!prev || a.happened_at < prev) firstVisit.set(a.partner_id, a.happened_at);
+  }
   return {
     visits: activities.filter((a) => (a.type === 'visit' || a.type === 'meeting') && localMonth(a.happened_at) === month).length,
+    hotels_visited: [...firstVisit.values()].filter((ts) => localMonth(ts) === month).length,
     new_partners: partners.filter((p) => p.stage === 'accepted' && p.accepted_at && monthOf(p.accepted_at) === month).length,
     bookings: partnerSales.length,
     revenue_eur: partnerSales.reduce((sum, s) => sum + Number(s.amount_eur), 0),
@@ -434,10 +511,16 @@ export const weekDays = (date) => Array.from({ length: 7 }, (_, i) => shiftDate(
 // 6 weeks × 7 days covering the month, starting on a Monday.
 export const monthGrid = (month) => Array.from({ length: 42 }, (_, i) => shiftDate(weekStart(`${month}-01`), i));
 
-// What is on one day: planned visits (sorted by area = walking route), to-dos and partner follow-ups.
-export function agenda(date, { tasks, partners }) {
+// What is on one day. category: '' (all) | 'sales' | 'marketing'.
+//   visits    planned hotel visits, sorted by area = walking route (sales)
+//   todos     tasks due that day (one-day tasks and deadlines)
+//   ongoing   multi-day tasks running that day (start_date ≤ day < deadline)
+//   followUps partner follow-ups not already covered by a planned visit (sales)
+//   posts     marketing posts planned / published that day
+export function agenda(date, { tasks, partners, posts = [] }, category = '') {
   const byId = new Map(partners.map((p) => [p.id, p]));
-  const onDay = tasks.filter((t) => t.due_date === date);
+  const inCat = (t) => !category || (t.category || 'sales') === category;
+  const onDay = tasks.filter((t) => t.due_date === date && inCat(t));
   const visits = onDay
     .filter((t) => t.type === 'visit')
     .map((t) => ({ ...t, partner: byId.get(t.partner_id) }))
@@ -447,31 +530,46 @@ export function agenda(date, { tasks, partners }) {
     .filter((t) => t.type !== 'visit')
     .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
     .sort((a, b) => a.done - b.done || (a.due_time ?? '99').localeCompare(b.due_time ?? '99'));
+  const ongoing = tasks
+    .filter((t) => !t.done && t.type !== 'visit' && t.start_date && t.start_date <= date && t.due_date > date && inCat(t))
+    .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
   const planned = new Set(onDay.filter((t) => t.type === 'visit').map((t) => t.partner_id));
   // A follow-up already covered by a planned visit that day isn't listed twice.
-  const followUps = partners.filter((p) => p.next_follow_up === date && isOpenStage(p) && !planned.has(p.id));
-  return { visits, todos, followUps };
+  const followUps = category === 'marketing' ? [] : partners.filter((p) => p.next_follow_up === date && isOpenStage(p) && !planned.has(p.id));
+  const dayPosts =
+    category === 'sales' ? [] : posts.filter((p) => p.publish_date === date && p.status !== 'idea').sort((a, b) => (a.publish_time ?? '99').localeCompare(b.publish_time ?? '99'));
+  return { visits, todos, ongoing, followUps, posts: dayPosts };
 }
 
+// Days left until a deadline (negative = late).
+export const daysLeft = (deadline, from = today()) => daysBetween(from, deadline);
+
 // Everything left undone before `date`.
-export function overdue(date, { tasks, partners }) {
+export function overdue(date, { tasks, partners, posts = [] }, category = '') {
   const byId = new Map(partners.map((p) => [p.id, p]));
+  const inCat = (t) => !category || (t.category || 'sales') === category;
   return {
     tasks: tasks
-      .filter((t) => !t.done && t.due_date < date && (t.type !== 'visit' || byId.has(t.partner_id)))
+      .filter((t) => !t.done && t.due_date < date && inCat(t) && (t.type !== 'visit' || byId.has(t.partner_id)))
       .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
       .sort((a, b) => a.due_date.localeCompare(b.due_date)),
-    followUps: partners.filter((p) => p.next_follow_up && p.next_follow_up < date && isOpenStage(p)).sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up)),
+    followUps:
+      category === 'marketing'
+        ? []
+        : partners.filter((p) => p.next_follow_up && p.next_follow_up < date && isOpenStage(p)).sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up)),
+    // Posts that should have gone out but aren't marked published.
+    posts: category === 'sales' ? [] : posts.filter((p) => p.publish_date && p.publish_date < date && ['in_progress', 'scheduled'].includes(p.status)),
   };
 }
 
-// Calendar markers: Map(date → { visits, todos, followUps, open }).
-export function dayCounts(dates, data) {
+// Calendar markers: Map(date → { visits, todos, followUps, posts, open }).
+export function dayCounts(dates, data, category = '') {
   const out = new Map();
   for (const d of dates) {
-    const a = agenda(d, data);
-    const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length;
-    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, open });
+    const a = agenda(d, data, category);
+    const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length + a.posts.filter((p) => p.status !== 'published').length;
+    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, posts: a.posts.length, open });
   }
   return out;
 }

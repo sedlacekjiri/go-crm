@@ -1,14 +1,16 @@
-// Tasks & calendar: plan which hotels to walk into on which day, to-dos, follow-ups.
-// A planned visit is ticked off automatically when the visit is logged.
-import { onSeg, pageHeader, seg, stageBadge } from '../components.js';
-import { agenda, AREAS, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, shiftDate, shiftMonth, STAGES, today, visitStats, weekDays } from '../lib.js';
+// Tasks & calendar: hotel visits, to-dos with deadlines, follow-ups and marketing posts – split into
+// Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
+import { categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
+import { agenda, AREAS, daysLeft, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
+import { postModal } from './marketing.js';
 import { logActivity } from './partner.js';
 
 // View state survives navigation.
 let selected = null;
 let mode = 'week';
+let category = ''; // '' | 'sales' | 'marketing'
 
 const dayTitle = (d) => {
   const t = today();
@@ -23,14 +25,14 @@ export function render(page, ctx) {
   selected ??= t;
   const admin = isAdmin();
   const days = mode === 'week' ? weekDays(selected) : monthGrid(monthOf(selected));
-  const counts = dayCounts(days, state);
-  const day = agenda(selected, state);
-  const late = overdue(t, state);
+  const counts = dayCounts(days, state, category);
+  const day = agenda(selected, state, category);
+  const late = overdue(t, state, category);
   const visits = visitStats(state.activities);
   const rangeLabel = mode === 'week' ? `${shortDate(days[0])} – ${shortDate(days[6])}` : monthLabel(monthOf(selected));
 
   const marker = (c) =>
-    `<span class="marks">${'<i class="v"></i>'.repeat(Math.min(c.visits, 3))}${c.todos ? '<i class="t"></i>' : ''}${c.followUps ? '<i class="f"></i>' : ''}</span>`;
+    `<span class="marks">${'<i class="v"></i>'.repeat(Math.min(c.visits, 3))}${c.todos ? '<i class="t"></i>' : ''}${c.followUps ? '<i class="f"></i>' : ''}${c.posts ? '<i class="p"></i>' : ''}</span>`;
 
   const cell = (d) => {
     const c = counts.get(d);
@@ -62,11 +64,20 @@ export function render(page, ctx) {
       ${admin ? `<button type="button" class="tick ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
         <span class="title">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</span>
-        <div class="meta">${[showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
+        <div class="meta">${[!category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
       </div>
       ${admin ? `<div class="acts">${task.type === 'visit' && !task.done ? `<button class="btn sm" data-log="${task.partner_id}">Log visit</button>` : ''}${showDate ? `<button class="btn secondary sm" data-today="${task.id}">Move to today</button>` : ''}<button class="icon-btn round sm" data-menu-task="${task.id}" aria-label="More">⋯</button></div>` : ''}
+    </li>`;
+
+  const postRow = (p, showDate = false) => `<li class="task">
+      <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
+      <div class="body">
+        <button type="button" class="title as-link" data-post="${p.id}">${esc(p.title)}</button>
+        <div class="meta">${!category ? categoryTag('marketing') : ''}${showDate ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span></div>
+      </div>
+      ${isAdmin() && p.status !== 'published' ? `<div class="acts"><button class="btn secondary sm" data-published="${p.id}">Mark published</button></div>` : ''}
     </li>`;
 
   const followRow = (p, showDate = false) => `<li class="task">
@@ -78,11 +89,14 @@ export function render(page, ctx) {
       ${admin ? `<div class="acts"><button class="btn secondary sm" data-plan-one="${p.id}">Plan visit ${selected === t ? 'today' : shortDate(selected)}</button></div>` : ''}
     </li>`;
 
-  const lateCount = late.tasks.length + late.followUps.length;
-  const empty = !day.visits.length && !day.todos.length && !day.followUps.length;
+  const lateCount = late.tasks.length + late.followUps.length + late.posts.length;
+  const empty = !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length;
 
   page.innerHTML = `
-    ${pageHeader('Tasks', 'Plan your hotel visits and to-dos', admin ? '<button class="btn secondary" data-new-task>+ Task</button><button class="btn" data-plan>Plan visits</button>' : '')}
+    ${pageHeader('Tasks', 'Hotel visits, to-dos and deadlines – sales and marketing', admin ? '<button class="btn secondary" data-new-task>+ Task</button><button class="btn" data-plan>Plan visits</button>' : '')}
+    <div class="chips" style="margin-bottom:12px">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES]
+      .map((c) => `<button type="button" data-cat="${c.value}" aria-pressed="${category === c.value}">${c.value ? `<i class="cdot cat-dot-${c.value}"></i>` : ''}${c.label}</button>`)
+      .join('')}</div>
     <section class="card cal-card">
       <div class="cal-head">
         <div class="controls">
@@ -98,14 +112,14 @@ export function render(page, ctx) {
       </div>
       ${mode === 'month' ? `<div class="cal-dows">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<span>${d}</span>`).join('')}</div>` : ''}
       <div class="cal ${mode}">${days.map(cell).join('')}</div>
-      <div class="cal-legend"><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do</span><span><i class="f"></i>Follow-up</span></div>
+      <div class="cal-legend"><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do / deadline</span><span><i class="f"></i>Follow-up</span><span><i class="p"></i>Post</span></div>
     </section>
 
     ${
       lateCount && selected === t
         ? `<section class="card late-card">
             <div class="card-head"><h2>Overdue <span class="muted">(${lateCount})</span></h2></div>
-            <ul class="tasks">${late.tasks.map((x) => todoRow(x, true)).join('')}${late.followUps.map((p) => followRow(p, true)).join('')}</ul>
+            <ul class="tasks">${late.tasks.map((x) => todoRow(x, true)).join('')}${late.followUps.map((p) => followRow(p, true)).join('')}${late.posts.map((p) => postRow(p, true)).join('')}</ul>
           </section>`
         : ''
     }
@@ -117,8 +131,10 @@ export function render(page, ctx) {
           ? `<p class="empty">Nothing planned for this day.${admin ? ' Use “Plan visits” to pick the hotels you’ll walk into.' : ''}</p>`
           : `
         ${day.visits.length ? `<h3 class="sec">Visits <span class="muted">· ${day.visits.filter((v) => v.done).length}/${day.visits.length} done · sorted by area</span></h3><ul class="tasks">${day.visits.map(visitRow).join('')}</ul>` : ''}
+        ${day.ongoing.length ? `<h3 class="sec">In progress <span class="muted">· multi-day tasks</span></h3><ul class="tasks">${day.ongoing.map((x) => todoRow(x)).join('')}</ul>` : ''}
+        ${day.posts.length ? `<h3 class="sec">Posts</h3><ul class="tasks">${day.posts.map((p) => postRow(p)).join('')}</ul>` : ''}
         ${day.followUps.length ? `<h3 class="sec">Follow-ups</h3><ul class="tasks">${day.followUps.map((p) => followRow(p)).join('')}</ul>` : ''}
-        ${day.todos.length ? `<h3 class="sec">To-dos</h3><ul class="tasks">${day.todos.map((x) => todoRow(x)).join('')}</ul>` : ''}`
+        ${day.todos.length ? `<h3 class="sec">To-dos &amp; deadlines</h3><ul class="tasks">${day.todos.map((x) => todoRow(x)).join('')}</ul>` : ''}`
       }
     </section>`;
 
@@ -132,7 +148,12 @@ export function render(page, ctx) {
     const el = e.target.closest('button');
     if (!el) return;
     const d = el.dataset;
-    if (d.day) {
+    if (d.cat !== undefined) {
+      category = d.cat;
+      rerender();
+    } else if (d.post) postModal(state.posts.find((x) => x.id === d.post), ctx.refresh);
+    else if (d.published) save({ id: d.published, status: 'published' }, 'Published ✓', ctx.refresh, '/api/posts');
+    else if (d.day) {
       selected = d.day;
       rerender();
     } else if (d.shift) {
@@ -142,7 +163,7 @@ export function render(page, ctx) {
       selected = t;
       rerender();
     } else if ('plan' in d) planVisits(selected, ctx.refresh);
-    else if ('newTask' in d) taskModal({ type: 'todo', due_date: selected }, ctx.refresh);
+    else if ('newTask' in d) taskModal({ type: 'todo', category: category || 'sales', due_date: selected }, ctx.refresh);
     else if (d.log) {
       const p = state.partners.find((x) => x.id === d.log);
       logActivity(p, state.contacts.filter((c) => c.partner_id === p.id), ctx.refresh);
@@ -162,9 +183,18 @@ export function render(page, ctx) {
   };
 }
 
-async function save(body, message, refresh) {
+// Deadline badge for multi-day tasks: "5 days left", "due today", "2 days late".
+function deadlinePill(task, isOverdueList) {
+  if (task.done || task.type === 'visit' || isOverdueList || !task.start_date) return '';
+  const left = daysLeft(task.due_date);
+  const cls = left < 0 ? 'overdue' : left <= 2 ? 'today' : '';
+  const text = left < 0 ? `${-left} days late` : left === 0 ? 'due today' : `deadline ${shortDate(task.due_date)} · ${left} day${left === 1 ? '' : 's'} left`;
+  return `<span class="pill ${cls}">${text}</span>`;
+}
+
+async function save(body, message, refresh, path = '/api/tasks') {
   try {
-    await api('/api/tasks', { method: 'POST', body });
+    await api(path, { method: 'POST', body });
     toast(message);
     refresh();
   } catch (err) {
@@ -290,9 +320,11 @@ export function taskModal(task, refresh) {
   const m = openModal(
     task.id ? (isVisit ? `Visit – ${partner?.name ?? ''}` : 'Edit task') : 'New task',
     `<form>
-      ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, call GM of Hotel Borg…" /></label>`}
-      <div class="form-grid">
-        <label class="field"><span>${isVisit ? 'Visit on' : 'Date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>
+      ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, prepare summer campaign…" /></label>
+      <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || 'sales') === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>`}
+      <div class="form-grid${isVisit ? '' : ' three'}">
+        ${isVisit ? '' : `<label class="field"><span>Start (optional)</span><input class="input" type="date" name="start_date" value="${esc(task.start_date ?? '')}" /><small>For longer tasks</small></label>`}
+        <label class="field"><span>${isVisit ? 'Visit on' : 'Deadline / date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>
         <label class="field"><span>Time (optional)</span><input class="input" type="time" name="due_time" value="${esc(task.due_time ?? '')}" /></label>
       </div>
       <div class="chips wrap-chips">${dateChips(task.due_date)}</div>
@@ -312,9 +344,17 @@ export function taskModal(task, refresh) {
   );
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
+  let cat = task.category || 'sales';
+  m.el.querySelector('[data-category]')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]');
+    if (!b) return;
+    cat = b.dataset.v;
+    m.el.querySelectorAll('[data-category] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const body = { ...formData(form), type: task.type, id: task.id };
+    const body = { ...formData(form), type: task.type, id: task.id, ...(isVisit ? {} : { category: cat }) };
+    if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
       await api('/api/tasks', { method: 'POST', body });
       m.close();

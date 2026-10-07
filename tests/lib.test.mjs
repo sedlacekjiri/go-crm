@@ -4,6 +4,9 @@ import { describe, it } from 'node:test';
 import {
   actuals,
   agenda,
+  daysLeft,
+  reviewGrowth,
+  reviewStats,
   dayCounts,
   dueCount,
   monthGrid,
@@ -180,16 +183,18 @@ describe('goals', () => {
       { id: 'b', stage: 'accepted', accepted_at: '2026-09-20', affiliate_code: null },
     ];
     const activities = [
-      { type: 'visit', happened_at: '2026-10-05T12:00:00.000Z' },
-      { type: 'meeting', happened_at: '2026-10-06T12:00:00.000Z' },
-      { type: 'call', happened_at: '2026-10-06T12:00:00.000Z' },
+      { partner_id: 'a', type: 'visit', happened_at: '2026-10-05T12:00:00.000Z' },
+      { partner_id: 'a', type: 'meeting', happened_at: '2026-10-06T12:00:00.000Z' },
+      { partner_id: 'b', type: 'call', happened_at: '2026-10-06T12:00:00.000Z' },
+      { partner_id: 'c', type: 'visit', happened_at: '2026-09-20T12:00:00.000Z' },
+      { partner_id: 'c', type: 'visit', happened_at: '2026-10-07T12:00:00.000Z' },
     ];
     const sales = [
       { booking_date: '2026-10-02', affiliate_code: 'borg', amount_eur: 500, is_cancelled: false },
       { booking_date: '2026-10-02', affiliate_code: 'borg', amount_eur: 500, is_cancelled: true },
       { booking_date: '2026-10-02', affiliate_code: null, amount_eur: 900, is_cancelled: false },
     ];
-    assert.deepEqual(actuals('2026-10', { partners, activities, sales }), { visits: 2, new_partners: 1, bookings: 1, revenue_eur: 500 });
+    assert.deepEqual(actuals('2026-10', { partners, activities, sales }), { visits: 3, hotels_visited: 1, new_partners: 1, bookings: 1, revenue_eur: 500 });
   });
 });
 
@@ -241,9 +246,53 @@ describe('tasks & calendar', () => {
   });
   it('counts markers and finds the next planned visit', () => {
     const c = dayCounts(['2026-10-08', '2026-10-09'], { tasks, partners });
-    assert.deepEqual(c.get('2026-10-08'), { visits: 2, todos: 1, followUps: 0, open: 3 });
+    assert.deepEqual(c.get('2026-10-08'), { visits: 2, todos: 1, followUps: 0, posts: 0, open: 3 });
     assert.equal(c.get('2026-10-09').open, 0);
     assert.equal(nextPlannedVisit('a', tasks), '2026-10-08');
     assert.equal(nextPlannedVisit('c', tasks), null);
+  });
+});
+
+describe('categories, deadlines, posts', () => {
+  const partners = [{ id: 'a', name: 'Hotel A', area: '101', stage: 'contacted', next_follow_up: '2026-10-08' }];
+  const tasks = [
+    { id: 1, type: 'todo', category: 'marketing', title: 'Summer campaign', start_date: '2026-10-01', due_date: '2026-10-15', done: false },
+    { id: 2, type: 'todo', category: 'sales', title: 'Print flyers', due_date: '2026-10-08', done: false },
+    { id: 3, type: 'visit', category: 'sales', partner_id: 'a', due_date: '2026-10-09', done: false },
+  ];
+  const posts = [
+    { id: 'p1', title: 'Aurora reel', status: 'scheduled', publish_date: '2026-10-08' },
+    { id: 'p2', title: 'Idea', status: 'idea', publish_date: '2026-10-08' },
+    { id: 'p3', title: 'Late post', status: 'in_progress', publish_date: '2026-10-02' },
+  ];
+  const data = { tasks, partners, posts };
+  it('shows multi-day tasks as ongoing until the deadline day', () => {
+    assert.deepEqual(agenda('2026-10-08', data).ongoing.map((t) => t.id), [1]);
+    assert.deepEqual(agenda('2026-10-15', data).ongoing, []);
+    assert.deepEqual(agenda('2026-10-15', data).todos.map((t) => t.id), [1]);
+    assert.deepEqual(agenda('2026-09-30', data).ongoing, []);
+  });
+  it('filters by category', () => {
+    const m = agenda('2026-10-08', data, 'marketing');
+    assert.deepEqual(m.todos, []);
+    assert.deepEqual(m.followUps, []);
+    assert.deepEqual(m.posts.map((p) => p.id), ['p1']);
+    const s = agenda('2026-10-08', data, 'sales');
+    assert.deepEqual(s.todos.map((t) => t.id), [2]);
+    assert.deepEqual(s.posts, []);
+    assert.equal(s.followUps.length, 1);
+    assert.deepEqual(overdue('2026-10-08', data, 'marketing').posts.map((p) => p.id), ['p3']);
+  });
+  it('counts days left', () => {
+    assert.equal(daysLeft('2026-10-15', '2026-10-08'), 7);
+    assert.equal(daysLeft('2026-10-05', '2026-10-08'), -3);
+  });
+  it('summarises reviews', () => {
+    const r = reviewStats([{ rating: 5, published_at: '2026-10-01' }, { rating: 5, published_at: '2026-09-01' }, { rating: 2, published_at: '2026-10-02' }]);
+    assert.deepEqual(r.stars, [0, 1, 0, 0, 2]);
+    assert.equal(r.average, 4);
+    assert.equal(reviewStats([{ rating: 5, published_at: '2026-10-01' }, { rating: 3, published_at: '2026-09-01' }], '2026-09-15').count, 1);
+    assert.deepEqual(reviewGrowth([{ day: '2026-09-01', rating: 4.6, rating_count: 1000 }, { day: '2026-10-01', rating: 4.7, rating_count: 1040 }]).gained, 40);
+    assert.equal(reviewGrowth([{ day: '2026-09-01', rating_count: 1 }]), null);
   });
 });

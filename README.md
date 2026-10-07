@@ -6,8 +6,10 @@ Push to GitHub → Cloudflare deploys it.
 
 - **Partners**: hotels, guesthouses, OTAs, cafés · Reykjavík districts + capital region · contact people · bulk add
 - **Pipeline**: New → Contacted → In talks → Accepted / Declined, plus interest Cold / Warm / Hot
-- **Tasks & calendar**: plan which hotels to visit on which day (grouped by area), to-dos, follow-ups;
-  logging a visit ticks the planned visit off automatically
+- **Tasks & calendar**: Sales / Marketing tasks, multi-day tasks with deadlines, planned hotel visits
+  (grouped by area), follow-ups and posts; logging a visit ticks the planned visit off automatically
+- **Marketing**: content calendar for Instagram / Facebook / TikTok / Google / YouTube, idea bank,
+  Google rating & reviews (Places API)
 - **Visit log** with follow-up reminders (the "+ Log visit" button on the phone)
 - **Sales**: import of the Caren (booking.caren.is) export, revenue by day / week / month,
   Go Car Rentals vs Go Campers, EUR ⇄ ISK (daily ECB rates), attribution by affiliate code
@@ -28,11 +30,25 @@ Push to GitHub → Cloudflare deploys it.
 4. **Passwords** – *Settings → Variables and Secrets → Add* (type **Secret**, environment *Production*):
    - `ADMIN_PASSWORD` – your password
    - `VIEWER_PASSWORD` – password for the owners (optional, read-only access)
+   - `GOOGLE_PLACES_API_KEY` – optional, for Marketing → Google reviews (see below)
 5. *Deployments* → **Retry deployment** (bindings and secrets apply to new deployments).
 6. Open `https://go-crm.pages.dev` (or add a custom domain under *Custom domains*), log in.
    On the phone: Share → **Add to Home Screen**.
 
 From now on every push to `main` redeploys automatically.
+
+## Google reviews (optional)
+
+Marketing → Google reviews reads the rating, review count and the newest reviews through Google's
+official **Places API (New)** – about 60 requests a month, well inside the 1,000 free ones.
+
+1. [console.cloud.google.com](https://console.cloud.google.com/) → new project (a billing account is required, nothing is charged in the free tier).
+2. *APIs & Services → Library* → **Places API (New)** → Enable.
+3. *Credentials → Create credentials → API key*, restrict it to Places API (New).
+4. Cloudflare → *Settings → Variables and Secrets* → Secret `GOOGLE_PLACES_API_KEY`, redeploy.
+5. In the CRM: Marketing → Google reviews → search your listing → Track.
+
+Each check returns up to 5 reviews; the CRM keeps every review it has seen, so the list grows over time.
 
 ## Importing sales from Caren
 

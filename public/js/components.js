@@ -44,12 +44,22 @@ export function onSeg(root, name, onChange) {
   });
 }
 
+// Channel tags: short code + coloured dot, so identity never relies on colour alone.
+export const channelTags = (channels = []) =>
+  channels.map((c) => `<span class="ch ch-${esc(c)}" title="${esc(CHANNEL_NAMES[c] ?? c)}"><i></i>${esc(CHANNEL_SHORT[c] ?? c)}</span>`).join('');
+const CHANNEL_NAMES = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', google: 'Google', youtube: 'YouTube' };
+const CHANNEL_SHORT = { instagram: 'IG', facebook: 'FB', tiktok: 'TikTok', google: 'Google', youtube: 'YT' };
+
+export const categoryTag = (c) => `<span class="cat cat-${c === 'marketing' ? 'marketing' : 'sales'}">${c === 'marketing' ? 'Marketing' : 'Sales'}</span>`;
+
 export const emptyBox = (title, body = '') => `<div class="empty-box"><b>${esc(title)}</b>${body}</div>`;
 
 export const ICONS = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg>',
   partners: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M3 21h18M8 8h3M8 12h3M8 16h3"/></svg>',
   tasks: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 14l2.5 2.5L16 12"/></svg>',
+  marketing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
   pipeline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></svg>',
   sales: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 20V11M11 20V5M16 20v-6M21 20V9"/></svg>',
   goals: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>',

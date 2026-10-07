@@ -19,7 +19,7 @@ import {
   totals,
 } from '../lib.js';
 import { currency, isAdmin, loadSales, state } from '../store.js';
-import { dateTime, esc, money, monthLabel, num, pct } from '../util.js';
+import { dateTime, esc, money, monthLabel, num, pct, shortDate } from '../util.js';
 
 export async function render(page, { isCurrent }) {
   const t = today();
@@ -44,6 +44,8 @@ export async function render(page, { isCurrent }) {
   const todayItems = [
     ...day.visits.map((v) => ({ title: v.partner.name, sub: `Visit · ${v.partner.area ?? ''}`, href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
     ...day.followUps.map((p) => ({ title: p.name, sub: `Follow-up · ${STAGES.find((s) => s.value === p.stage)?.label}`, href: `#/partner/${p.id}`, done: false, pill: followUpPill(p.next_follow_up) })),
+    ...day.posts.map((x) => ({ title: x.title, sub: ['Post', x.publish_time, x.channels.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ')].filter(Boolean).join(' · '), href: '#/marketing', done: x.status === 'published', pill: x.status === 'published' ? '<span class="pill good">Published</span>' : '<span class="pill">Post</span>' })),
+    ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, href: '#/tasks', done: false, pill: '' })),
     ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time, x.partner?.name].filter(Boolean).join(' · '), href: '#/tasks', done: x.done, pill: x.done ? '<span class="pill good">Done</span>' : '' })),
   ];
   const actual = actuals(month, { ...state, sales });

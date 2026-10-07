@@ -102,6 +102,57 @@ const SCHEMA = [
   )`,
   `CREATE INDEX IF NOT EXISTS tasks_due ON tasks (done, due_date)`,
   `CREATE INDEX IF NOT EXISTS tasks_partner ON tasks (partner_id, done)`,
+  `CREATE TABLE IF NOT EXISTS posts (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    brand TEXT,
+    channels TEXT,
+    format TEXT,
+    theme TEXT,
+    status TEXT NOT NULL DEFAULT 'idea',
+    publish_date TEXT,
+    publish_time TEXT,
+    caption TEXT,
+    media_url TEXT,
+    post_url TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS posts_date ON posts (publish_date)`,
+  `CREATE TABLE IF NOT EXISTS review_places (
+    place_id TEXT PRIMARY KEY,
+    label TEXT,
+    name TEXT,
+    address TEXT,
+    maps_uri TEXT,
+    rating REAL,
+    rating_count INTEGER,
+    fetched_at TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS review_snapshots (
+    place_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    rating REAL,
+    rating_count INTEGER,
+    PRIMARY KEY (place_id, day)
+  )`,
+  `CREATE TABLE IF NOT EXISTS reviews (
+    id TEXT PRIMARY KEY,
+    place_id TEXT NOT NULL,
+    rating INTEGER,
+    text TEXT,
+    language TEXT,
+    author TEXT,
+    author_uri TEXT,
+    author_photo TEXT,
+    published_at TEXT,
+    review_uri TEXT,
+    first_seen TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS reviews_place ON reviews (place_id, published_at)`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
@@ -110,10 +161,22 @@ const SCHEMA = [
   )`,
 ];
 
+// Columns added after the first release. SQLite has no "ADD COLUMN IF NOT EXISTS",
+// so each one is tried and the "duplicate column" error is ignored.
+const MIGRATIONS = [
+  `ALTER TABLE tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'sales'`,
+  `ALTER TABLE tasks ADD COLUMN start_date TEXT`,
+];
+
 let schemaReady = false;
 export async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch(SCHEMA.map((sql) => db.prepare(sql)));
+  for (const sql of MIGRATIONS) {
+    try {
+      await db.prepare(sql).run();
+    } catch {}
+  }
   schemaReady = true;
 }
 

@@ -50,7 +50,7 @@ export async function onRequestPost({ request, env }) {
     if ('stage' in b.partner) patch.stage = b.partner.stage;
     if ('next_follow_up' in b.partner) patch.next_follow_up = b.partner.next_follow_up;
     if (Object.keys(patch).length) {
-      const result = await savePartner(env.DB, { id: partner.id, ...patch });
+      const result = await savePartner(env.DB, { id: partner.id, ...patch }, { visitLogged: row.type === 'visit' || row.type === 'meeting' });
       if (result.error) return bad(result.error, result.status);
     }
   }

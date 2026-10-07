@@ -3,7 +3,7 @@
 
 import { authorize, bad, json, readJson } from '../_lib/db.js';
 
-const METRICS = ['visits', 'new_partners', 'bookings', 'revenue_eur'];
+const METRICS = ['visits', 'hotels_visited', 'new_partners', 'bookings', 'revenue_eur'];
 
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true });
