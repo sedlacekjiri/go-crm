@@ -8,7 +8,7 @@ export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
   if (auth instanceof Response) return auth;
   const db = env.DB;
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, goals, sales] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, goals, sales] = await db.batch([
     db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE'),
     db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE'),
     db.prepare('SELECT * FROM activities ORDER BY happened_at DESC'),
@@ -17,6 +17,7 @@ export async function onRequestGet({ request, env }) {
     db.prepare('SELECT * FROM posts ORDER BY publish_date, publish_time'),
     db.prepare('SELECT * FROM affiliates ORDER BY name COLLATE NOCASE'),
     db.prepare('SELECT * FROM payouts ORDER BY paid_at DESC'),
+    db.prepare('SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC'),
     db.prepare('SELECT * FROM goals'),
     db.prepare('SELECT COUNT(*) AS n, MIN(booking_date) AS first, MAX(booking_date) AS last, MAX(imported_at) AS imported FROM sales'),
   ]);
@@ -29,6 +30,7 @@ export async function onRequestGet({ request, env }) {
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [] })),
     affiliates: affiliates.results,
     payouts: payouts.results,
+    notes: notes.results.map((n) => ({ ...n, pinned: !!n.pinned })),
     goals: goals.results,
     salesInfo: sales.results[0],
   });

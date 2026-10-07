@@ -5,6 +5,7 @@ import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf
 import { api, isAdmin, state } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
+import { handleNoteClick, pinnedStrip, renderBoard } from './notes.js';
 import { logActivity } from './partner.js';
 
 // View state survives navigation.
@@ -118,11 +119,33 @@ export function render(page, ctx) {
   const lateCount = late.tasks.length + late.followUps.length + late.posts.length;
   const empty = !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length;
 
-  page.innerHTML = `
-    ${pageHeader('Tasks', 'Hotel visits, to-dos and deadlines – sales and marketing', admin ? '<button class="btn secondary" data-new-task>+ Task</button><button class="btn" data-plan>Plan visits</button>' : '')}
-    <div class="chips" style="margin-bottom:12px">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES]
-      .map((c) => `<button type="button" data-cat="${c.value}" aria-pressed="${category === c.value}">${c.value ? `<i class="cdot cat-dot-${c.value}"></i>` : ''}${c.label}</button>`)
-      .join('')}</div>
+  const tab = ctx.query.get('tab') === 'notes' ? 'notes' : 'plan';
+  const top = `
+    ${pageHeader('Tasks', 'Hotel visits, to-dos, deadlines and notes – sales and marketing', admin ? '<button class="btn secondary" data-new-task>+ Task</button><button class="btn" data-plan>Plan visits</button>' : '')}
+    <div class="tasks-top">
+      <nav class="tabs tasks-tabs"><a href="#/tasks" class="${tab === 'plan' ? 'active' : ''}">Plan</a><a href="#/tasks?tab=notes" class="${tab === 'notes' ? 'active' : ''}">Notes<span class="count">${state.notes.length}</span></a></nav>
+      <div class="chips">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES]
+        .map((c) => `<button type="button" data-cat="${c.value}" aria-pressed="${category === c.value}">${c.value ? `<i class="cdot cat-dot-${c.value}"></i>` : ''}${c.label}</button>`)
+        .join('')}</div>
+    </div>`;
+
+  if (tab === 'notes') {
+    page.innerHTML = `${top}<div id="notesBoard"></div>`;
+    renderBoard(page.querySelector('#notesBoard'), category, ctx.refresh);
+    page.onclick = async (e) => {
+      if (await handleNoteClick(e, ctx.refresh)) return;
+      const b = e.target.closest('button');
+      if (b?.dataset.cat !== undefined) {
+        category = b.dataset.cat;
+        render(page, ctx);
+      } else if (b && 'plan' in b.dataset) planVisits(selected, ctx.refresh);
+      else if (b && 'newTask' in b.dataset) taskModal({ type: 'todo', category: category || 'sales', due_date: selected }, ctx.refresh);
+    };
+    return;
+  }
+
+  page.innerHTML = `${top}
+    ${pinnedStrip(category)}
     <section class="card cal-card">
       <div class="cal-head">
         <div class="controls">
@@ -186,6 +209,7 @@ export function render(page, ctx) {
     rerender();
   });
   page.onclick = async (e) => {
+    if (await handleNoteClick(e, ctx.refresh)) return;
     const el = e.target.closest('button');
     if (!el) return;
     const d = el.dataset;

@@ -46,6 +46,7 @@ export async function onRequestDelete({ request, env }) {
     env.DB.prepare('DELETE FROM tasks WHERE partner_id = ?').bind(id),
     // Front-line people stay (with their payouts) but are no longer linked to the hotel.
     env.DB.prepare('UPDATE affiliates SET partner_id = NULL WHERE partner_id = ?').bind(id),
+    env.DB.prepare('UPDATE notes SET partner_id = NULL WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM contacts WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM partners WHERE id = ?').bind(id),
   ]);

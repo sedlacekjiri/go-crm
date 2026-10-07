@@ -53,6 +53,7 @@ export const state = {
   posts: [],
   affiliates: [],
   payouts: [],
+  notes: [],
   goals: [],
   salesInfo: null,
 };

@@ -179,6 +179,16 @@ const SCHEMA = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS payouts_affiliate ON payouts (affiliate_id)`,
+  `CREATE TABLE IF NOT EXISTS notes (
+    id TEXT PRIMARY KEY,
+    text TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT 'yellow',
+    pinned INTEGER NOT NULL DEFAULT 0,
+    category TEXT,
+    partner_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
