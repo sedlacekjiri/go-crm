@@ -1,5 +1,5 @@
 // /api/posts (admin only) — marketing content: ideas and planned / published posts.
-//   POST   { id?, title, brand, channels: [...], format, theme, status, publish_date, publish_time,
+//   POST   { id?, title, brand, channels: [...], format, theme, status, publish_date, publish_time, deadline,
 //            caption, media_url, post_url, notes }   create, or update only the fields sent
 //   DELETE ?id=…
 
@@ -20,6 +20,7 @@ const FIELDS = {
   status: (v) => oneOf(v, STATUSES, 'idea'),
   publish_date: (v) => (isDate(v) ? v : null),
   publish_time: (v) => (isTime(v) ? v : null),
+  deadline: (v) => (isDate(v) ? v : null), // content ready by
   caption: (v) => str(v, 5000),
   media_url: (v) => str(v, 1000),
   post_url: (v) => str(v, 1000),

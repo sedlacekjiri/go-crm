@@ -99,13 +99,13 @@ export function render(page, ctx) {
       ${subtaskProgress(task).total && subtaskProgress(task).done === subtaskProgress(task).total && !task.done && admin ? `<button type="button" class="link-btn" data-toggle="${task.id}">All subtasks done – tick the whole task ✓</button>` : ''}
     </div>`;
 
-  const postRow = (p, showDate = false) => `<li class="task">
+  const postRow = (p, showDate = false, readyBy = false) => `<li class="task">
       <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
       <div class="body">
         <button type="button" class="title as-link" data-post="${p.id}">${esc(p.title)}</button>
-        <div class="meta">${!category ? categoryTag('marketing') : ''}${showDate ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span></div>
+        <div class="meta">${!category ? categoryTag('marketing') : ''}${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span></div>
       </div>
-      ${isAdmin() && p.status !== 'published' ? `<div class="acts"><button class="btn secondary sm" data-published="${p.id}">Mark published</button></div>` : ''}
+      ${isAdmin() && p.status !== 'published' ? `<div class="acts">${readyBy || ['idea', 'in_progress'].includes(p.status) ? `<button class="btn secondary sm" data-ready="${p.id}">Ready ✓</button>` : `<button class="btn secondary sm" data-published="${p.id}">Mark published</button>`}</div>` : ''}
     </li>`;
 
   const followRow = (p, showDate = false) => `<li class="task">
@@ -118,7 +118,7 @@ export function render(page, ctx) {
     </li>`;
 
   const lateCount = late.tasks.length + late.followUps.length + late.posts.length;
-  const empty = !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length;
+  const empty = !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length && !day.readyBy.length;
 
   const tab = ['notes', 'done'].includes(ctx.query.get('tab')) ? ctx.query.get('tab') : 'plan';
   const top = `
@@ -183,6 +183,7 @@ export function render(page, ctx) {
           : `
         ${day.visits.length ? `<h3 class="sec">Visits <span class="muted">· ${day.visits.filter((v) => v.done).length}/${day.visits.length} done · sorted by area</span></h3><ul class="tasks">${day.visits.map(visitRow).join('')}</ul>` : ''}
         ${day.ongoing.length ? `<h3 class="sec">In progress <span class="muted">· multi-day tasks</span></h3><ul class="tasks">${day.ongoing.map((x) => todoRow(x)).join('')}</ul>` : ''}
+        ${day.readyBy.length ? `<h3 class="sec">Content deadlines</h3><ul class="tasks">${day.readyBy.map((p) => postRow(p, false, true)).join('')}</ul>` : ''}
         ${day.posts.length ? `<h3 class="sec">Posts</h3><ul class="tasks">${day.posts.map((p) => postRow(p)).join('')}</ul>` : ''}
         ${day.followUps.length ? `<h3 class="sec">Follow-ups</h3><ul class="tasks">${day.followUps.map((p) => followRow(p)).join('')}</ul>` : ''}
         ${day.todos.length ? `<h3 class="sec">To-dos &amp; deadlines</h3><ul class="tasks">${day.todos.map((x) => todoRow(x)).join('')}</ul>` : ''}`
@@ -235,6 +236,12 @@ export function render(page, ctx) {
       rerender();
     } else if (d.post) postModal(state.posts.find((x) => x.id === d.post), ctx.refresh);
     else if (d.published) save({ id: d.published, status: 'published' }, 'Published ✓', ctx.refresh, '/api/posts');
+    else if (d.ready) {
+      const p = state.posts.find((x) => x.id === d.ready);
+      // Ready content becomes Scheduled (needs a publish date) – otherwise open the post to set one.
+      if (p.publish_date) save({ id: p.id, status: 'scheduled' }, 'Content ready – scheduled ✓', ctx.refresh, '/api/posts');
+      else postModal({ ...p, status: 'scheduled' }, ctx.refresh);
+    }
     else if (d.day) {
       selected = d.day;
       rerender();

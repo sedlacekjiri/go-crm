@@ -203,6 +203,7 @@ const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'sales'`,
   `ALTER TABLE tasks ADD COLUMN start_date TEXT`,
   `ALTER TABLE tasks ADD COLUMN subtasks TEXT`, // JSON: [{ id, title, done }]
+  `ALTER TABLE posts ADD COLUMN deadline TEXT`, // content ready by
 ];
 
 let schemaReady = false;

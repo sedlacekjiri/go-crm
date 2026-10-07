@@ -602,7 +602,9 @@ export function agenda(date, { tasks, partners, posts = [] }, category = '') {
   const followUps = category === 'marketing' ? [] : partners.filter((p) => p.next_follow_up === date && isOpenStage(p) && !planned.has(p.id));
   const dayPosts =
     category === 'sales' ? [] : posts.filter((p) => p.publish_date === date && p.status !== 'idea').sort((a, b) => (a.publish_time ?? '99').localeCompare(b.publish_time ?? '99'));
-  return { visits, todos, ongoing, followUps, posts: dayPosts };
+  // Content that has to be ready that day.
+  const readyBy = category === 'sales' ? [] : posts.filter((p) => p.deadline === date && postDeadlineOpen(p));
+  return { visits, todos, ongoing, followUps, posts: dayPosts, readyBy };
 }
 
 // Finished tasks grouped by the (local) day they were ticked off, newest first.
@@ -624,6 +626,21 @@ export function subtaskProgress(task) {
   return { done: list.filter((s) => s.done).length, total: list.length };
 }
 
+// A post's "ready by" deadline counts while the content isn't ready yet (idea / in progress).
+export const postDeadlineOpen = (p) => !!p.deadline && (p.status === 'idea' || p.status === 'in_progress');
+
+// Upcoming and overdue marketing deadlines: posts' "ready by" + open marketing tasks, soonest first.
+export function marketingDeadlines({ tasks, posts = [] }, from = today(), days = 30) {
+  const until = shiftDate(from, days);
+  const items = [
+    ...posts.filter((p) => postDeadlineOpen(p) && p.deadline <= until).map((p) => ({ kind: 'post', id: p.id, title: p.title, date: p.deadline, ref: p })),
+    ...tasks
+      .filter((t) => !t.done && t.type !== 'visit' && (t.category || 'sales') === 'marketing' && t.due_date <= until)
+      .map((t) => ({ kind: 'task', id: t.id, title: t.title, date: t.due_date, ref: t })),
+  ];
+  return items.map((x) => ({ ...x, daysLeft: daysBetween(from, x.date) })).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // Days left until a deadline (negative = late).
 export const daysLeft = (deadline, from = today()) => daysBetween(from, deadline);
 
@@ -641,7 +658,14 @@ export function overdue(date, { tasks, partners, posts = [] }, category = '') {
         ? []
         : partners.filter((p) => p.next_follow_up && p.next_follow_up < date && isOpenStage(p)).sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up)),
     // Posts that should have gone out but aren't marked published.
-    posts: category === 'sales' ? [] : posts.filter((p) => p.publish_date && p.publish_date < date && ['in_progress', 'scheduled'].includes(p.status)),
+    posts:
+      category === 'sales'
+        ? []
+        : posts.filter(
+            (p) =>
+              (p.publish_date && p.publish_date < date && ['in_progress', 'scheduled'].includes(p.status)) ||
+              (postDeadlineOpen(p) && p.deadline < date && !(p.publish_date && p.publish_date < date))
+          ),
   };
 }
 
@@ -650,8 +674,8 @@ export function dayCounts(dates, data, category = '') {
   const out = new Map();
   for (const d of dates) {
     const a = agenda(d, data, category);
-    const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length + a.posts.filter((p) => p.status !== 'published').length;
-    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, posts: a.posts.length, open });
+    const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length + a.posts.filter((p) => p.status !== 'published').length + a.readyBy.length;
+    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, posts: a.posts.length + a.readyBy.length, open });
   }
   return out;
 }

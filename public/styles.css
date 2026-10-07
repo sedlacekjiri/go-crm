@@ -835,3 +835,21 @@ button.row:hover { background: var(--surface-2); }
   .sticky-acts button { opacity: 1; }
 }
 .done-day { margin-top: 12px; } .done-day .task .title { color: var(--text); text-decoration: none; }
+
+/* ── Marketing deadlines ───────────────── */
+.deadlines { margin-bottom: 12px; }
+.dl-list { list-style: none; display: flex; flex-direction: column; }
+.dl-row { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; width: 100%; border: 0; background: transparent; text-align: left; padding: 8px 6px; border-radius: 10px; color: var(--text); }
+.dl-row:hover { background: var(--surface-2); }
+.dl-list li + li .dl-row { border-top: 1px solid var(--border); border-radius: 0; }
+.dl-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mkt); background: color-mix(in srgb, var(--mkt) 12%, transparent); border-radius: 6px; padding: 2px 0; text-align: center; }
+.dl-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dchip { display: flex; align-items: center; gap: 4px; width: 100%; border: 1px dashed color-mix(in srgb, var(--warn) 60%, transparent); background: var(--warn-soft); color: var(--text); border-radius: 7px; padding: 2px 6px; font-size: 11px; font-weight: 600; text-align: left; min-width: 0; }
+.dchip.late { border-color: color-mix(in srgb, var(--bad) 60%, transparent); background: var(--bad-soft); }
+.dchip .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 680px) {
+  .dl-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .dl-row > .muted { display: none; }
+  .mcal.month .dchip { padding: 0; border: 0; background: none !important; font-size: 9px; }
+  .mcal.month .dchip .tx { display: none; }
+}

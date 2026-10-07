@@ -357,3 +357,26 @@ describe('done history', () => {
     assert.equal(g[1].items[0].lateBy, 0); // done early
   });
 });
+
+describe('marketing deadlines', () => {
+  it('lists open post deadlines and marketing tasks, soonest first', async () => {
+    const { marketingDeadlines, agenda, overdue, postDeadlineOpen } = await import('../public/js/lib.js');
+    const posts = [
+      { id: 'p1', title: 'Aurora reel', status: 'in_progress', deadline: '2026-10-09', publish_date: '2026-10-12' },
+      { id: 'p2', title: 'Ready already', status: 'scheduled', deadline: '2026-10-08', publish_date: '2026-10-10' },
+      { id: 'p3', title: 'Late idea', status: 'idea', deadline: '2026-10-05' },
+      { id: 'p4', title: 'Far away', status: 'idea', deadline: '2026-12-20' },
+    ];
+    const tasks = [
+      { id: 't1', type: 'todo', category: 'marketing', title: 'Campaign brief', due_date: '2026-10-08', done: false },
+      { id: 't2', type: 'todo', category: 'sales', title: 'Sales thing', due_date: '2026-10-08', done: false },
+      { id: 't3', type: 'todo', category: 'marketing', title: 'Done one', due_date: '2026-10-08', done: true },
+    ];
+    assert.equal(postDeadlineOpen(posts[1]), false);
+    const d = marketingDeadlines({ tasks, posts }, '2026-10-07');
+    assert.deepEqual(d.map((x) => x.id), ['p3', 't1', 'p1']);
+    assert.deepEqual(d.map((x) => x.daysLeft), [-2, 1, 2]);
+    assert.deepEqual(agenda('2026-10-09', { tasks, partners: [], posts }).readyBy.map((p) => p.id), ['p1']);
+    assert.deepEqual(overdue('2026-10-07', { tasks, partners: [], posts }).posts.map((p) => p.id), ['p3']);
+  });
+});

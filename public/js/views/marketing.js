@@ -7,6 +7,7 @@ import {
   monthOf,
   POST_BRANDS,
   POST_STATUSES,
+  marketingDeadlines,
   postStatusLabel,
   reviewGrowth,
   reviewStats,
@@ -18,6 +19,14 @@ import {
 } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
+import { taskModal } from './tasks.js';
+
+// "3 days left" / "today" / "2 days late" pill for a deadline.
+export const deadlinePill = (daysLeft, prefix = '') => {
+  const cls = daysLeft < 0 ? 'overdue' : daysLeft <= 2 ? 'today' : '';
+  const text = daysLeft < 0 ? `${-daysLeft} day${daysLeft === -1 ? '' : 's'} late` : daysLeft === 0 ? 'due today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`;
+  return `<span class="pill ${cls}">${prefix}${text}</span>`;
+};
 
 // View state survives navigation.
 const v = { selected: null, mode: 'month', channel: '', brand: '', theme: '', stars: '' };
@@ -53,9 +62,17 @@ export async function render(page, ctx) {
       ${kpi('Ideas in the bank', ideas.length, ideas.length ? 'ready to schedule' : 'add one with + Idea')}
       <div class="kpi" id="ratingKpi"><div class="label">Google rating</div><div class="value">…</div><div class="delta"></div></div>
     </div>
+    ${deadlinesCard()}
     <nav class="tabs">${TABS.map((x) => `<a href="#/marketing?tab=${x.value}" class="${x.value === tab ? 'active' : ''}">${x.label}${x.value === 'ideas' ? `<span class="count">${ideas.length}</span>` : ''}</a>`).join('')}</nav>
     <div id="mBody"></div>`;
 
+  page.querySelector('.deadlines')?.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.dlPost) postModal(state.posts.find((x) => x.id === b.dataset.dlPost), ctx.refresh);
+    else if (b.dataset.dlTask) taskModal(state.tasks.find((x) => x.id === b.dataset.dlTask), ctx.refresh);
+    else if ('dlNew' in b.dataset) taskModal({ type: 'todo', category: 'marketing', start_date: today(), due_date: shiftDate(today(), 7) }, ctx.refresh);
+  });
   page.querySelector('[data-new-post]')?.addEventListener('click', () => postModal({ status: 'scheduled', publish_date: v.selected, channels: ['instagram'] }, ctx.refresh));
   page.querySelector('[data-new-idea]')?.addEventListener('click', () => postModal({ status: 'idea', channels: [] }, ctx.refresh));
 
@@ -101,6 +118,14 @@ function renderContent(el, ctx) {
     `<button type="button" class="pchip st-${p.status}" data-post="${p.id}" title="${esc(`${p.title} · ${postStatusLabel(p.status)}`)}">
       <span class="dots">${p.channels.map((c) => `<i class="c-${esc(c)}"></i>`).join('')}</span><span class="tx">${p.publish_time ? `${esc(p.publish_time)} ` : ''}${esc(p.title)}</span></button>`;
 
+  // Deadlines (post "ready by" + marketing tasks) by day, shown as ⏰ chips.
+  const deadlines = new Map();
+  for (const x of marketingDeadlines(state, days[0], 60).filter((x) => x.date >= days[0] && x.date <= days.at(-1))) {
+    if (!deadlines.has(x.date)) deadlines.set(x.date, []);
+    deadlines.get(x.date).push(x);
+  }
+  const dlChip = (x) =>
+    `<button type="button" class="dchip ${x.date < t ? 'late' : ''}" ${x.kind === 'post' ? `data-post="${x.id}"` : `data-dl-task="${x.id}"`} title="${esc(`Deadline: ${x.title}`)}">⏰ <span class="tx">${esc(x.title)}</span></button>`;
   const limit = v.mode === 'week' ? 8 : 3;
   const cell = (d) => {
     const list = byDay.get(d) ?? [];
@@ -108,6 +133,7 @@ function renderContent(el, ctx) {
     return `<div class="mday ${cls}" data-day="${d}">
       <div class="mday-h"><span class="dn">${v.mode === 'week' ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' : ''}${Number(d.slice(8))}</span>
         ${admin ? `<button type="button" class="add" data-add="${d}" aria-label="New post on ${shortDate(d)}">+</button>` : ''}</div>
+      ${(deadlines.get(d) ?? []).map(dlChip).join('')}
       ${list.slice(0, limit).map(chip).join('')}${list.length > limit ? `<span class="more">+${list.length - limit} more</span>` : ''}
     </div>`;
   };
@@ -138,7 +164,7 @@ function renderContent(el, ctx) {
         .join('')}</div>
       ${v.mode === 'month' ? `<div class="cal-dows">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<span>${d}</span>`).join('')}</div>` : ''}
       <div class="mcal ${v.mode}">${days.map(cell).join('')}</div>
-      <div class="cal-legend"><span><i class="lg st-idea"></i>Planned</span><span><i class="lg st-in_progress"></i>In progress</span><span><i class="lg st-scheduled"></i>Scheduled</span><span><i class="lg st-published"></i>Published</span></div>
+      <div class="cal-legend"><span>⏰ Deadline</span><span><i class="lg st-idea"></i>Planned</span><span><i class="lg st-in_progress"></i>In progress</span><span><i class="lg st-scheduled"></i>Scheduled</span><span><i class="lg st-published"></i>Published</span></div>
     </section>
 
     <div class="grid grid-side">
@@ -173,6 +199,9 @@ function renderContent(el, ctx) {
     if (d.post) {
       e.stopPropagation();
       postModal(state.posts.find((p) => p.id === d.post), ctx.refresh);
+    } else if (d.dlTask) {
+      e.stopPropagation();
+      taskModal(state.tasks.find((x) => x.id === d.dlTask), ctx.refresh);
     } else if (d.add) postModal({ status: 'scheduled', publish_date: d.add, channels: ['instagram'] }, ctx.refresh);
     else if (d.shift) {
       v.selected = v.mode === 'week' ? shiftDate(v.selected, 7 * Number(d.shift)) : `${shiftMonth(monthOf(v.selected), Number(d.shift))}-01`;
@@ -192,7 +221,7 @@ function renderContent(el, ctx) {
 
 function postCard(p) {
   return `<article class="post-card" data-post="${p.id}">
-    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}</div>
+    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}</div>
     <h4>${esc(p.title)}</h4>
     <div class="muted small">${[brandName(p.brand), fmtName(p.format), p.theme].filter(Boolean).map(esc).join(' · ')}</div>
     ${p.caption ? `<p class="caption">${esc(p.caption.length > 180 ? `${p.caption.slice(0, 180)}…` : p.caption)}</p>` : ''}
@@ -229,6 +258,7 @@ function renderIdeas(el, ctx) {
                 ${p.theme ? `<span class="theme">${esc(p.theme)}</span>` : ''}
                 <h4>${esc(p.title)}</h4>
                 ${p.caption ? `<p>${esc(p.caption.length > 140 ? `${p.caption.slice(0, 140)}…` : p.caption)}</p>` : ''}
+                ${readyByPill(p)}
                 <div class="idea-foot">${channelTags(p.channels)}<span class="muted small">${esc(brandName(p.brand))}</span>
                   ${admin ? `<span class="idea-acts"><button class="btn sm" data-schedule="${p.id}">Schedule</button><button class="icon-btn round sm" data-post="${p.id}" aria-label="Edit">✎</button></span>` : ''}</div>
               </article>`
@@ -273,6 +303,16 @@ export function postModal(post, refresh) {
         <label class="field"><span>Publish date</span><input class="input" type="date" name="publish_date" value="${esc(post.publish_date ?? '')}" /></label>
         <label class="field"><span>Time</span><input class="input" type="time" name="publish_time" value="${esc(post.publish_time ?? '')}" /></label>
       </div>
+      <label class="field"><span>Content ready by (deadline)</span>
+        <div class="follow-row"><input class="input" type="date" name="deadline" value="${esc(post.deadline ?? '')}" />
+          <div class="chips wrap-chips" data-dl-quick>${[
+            ['Day before posting', -1],
+            ['3 days before', -3],
+            ['A week before', -7],
+          ]
+            .map(([l, n]) => `<button type="button" data-n="${n}">${l}</button>`)
+            .join('')}</div></div>
+        <small>Shows in Tasks and the deadline list until the post is Scheduled or Published.</small></label>
       <div class="field"><span>Channels</span><div class="chips wrap-chips" data-channels>${CHANNELS.map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${chosen.has(c.value)}"><i class="cdot c-${c.value}"></i>${c.label}</button>`).join('')}</div></div>
       <div class="form-grid three">
         <label class="field"><span>Brand</span><select class="input" name="brand">${options(POST_BRANDS, post.brand, { empty: '–' })}</select></label>
@@ -291,6 +331,15 @@ export function postModal(post, refresh) {
   );
   const form = m.el.querySelector('form');
   let status = post.status ?? 'idea';
+  m.el.querySelector('[data-dl-quick]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-n]');
+    if (!b) return;
+    if (!form.publish_date.value) return toast('Set the publish date first', 'error');
+    const d = shiftDate(form.publish_date.value, Number(b.dataset.n));
+    // Publishing very soon: a deadline in the past makes no sense – use today.
+    form.deadline.value = d < today() ? today() : d;
+    if (d < today()) toast('Goes live soon – deadline set to today');
+  });
   const whenRow = m.el.querySelector('[data-when]');
   const sync = () => (whenRow.style.opacity = status === 'idea' ? 0.5 : 1);
   sync();
@@ -561,4 +610,34 @@ function sparkline(el, snaps) {
       <polyline points="${pts}" class="spark-line"/>
     </svg>
     <div class="spark-lbl"><span>${esc(shortDate(snaps[0].day))} · ${num(vals[0])}</span><span>${esc(shortDate(snaps.at(-1).day))} · ${num(vals.at(-1))}</span></div>`;
+}
+
+function readyByPill(p) {
+  if (!p.deadline) return '';
+  if (p.status === 'scheduled' || p.status === 'published') return '<span class="pill good">✓ ready</span>';
+  return deadlinePill(Math.round((Date.parse(`${p.deadline}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86400000), 'ready by · ');
+}
+
+// Upcoming / overdue marketing deadlines (posts' "ready by" + marketing tasks) at the top of Marketing.
+function deadlinesCard() {
+  const list = marketingDeadlines(state, today(), 30);
+  const admin = isAdmin();
+  if (!list.length && !admin) return '';
+  return `<section class="card deadlines">
+    <div class="card-head"><h2>Deadlines <span class="muted">· next 30 days</span></h2>${admin ? '<button class="link-btn" data-dl-new>+ Task with deadline</button>' : ''}</div>
+    ${
+      list.length
+        ? `<ul class="dl-list">${list
+            .slice(0, 8)
+            .map(
+              (x) => `<li><button type="button" class="dl-row" ${x.kind === 'post' ? `data-dl-post="${x.id}"` : `data-dl-task="${x.id}"`}>
+                <span class="dl-kind">${x.kind === 'post' ? 'Post' : 'Task'}</span>
+                <span class="dl-title">${esc(x.title)}${x.kind === 'post' && x.ref.publish_date ? ` <span class="muted small">· goes live ${esc(shortDate(x.ref.publish_date))}</span>` : ''}${x.kind === 'task' && x.ref.subtasks?.length ? ` <span class="muted small">· ☑ ${x.ref.subtasks.filter((s) => s.done).length}/${x.ref.subtasks.length}</span>` : ''}</span>
+                <span class="muted small nowrap">${esc(shortDate(x.date))}</span>${deadlinePill(x.daysLeft)}
+              </button></li>`
+            )
+            .join('')}</ul>${list.length > 8 ? `<a class="link-btn" href="#/tasks?tab=plan">+ ${list.length - 8} more in Tasks →</a>` : ''}`
+        : '<p class="empty">No deadlines coming up. Add a “ready by” date to a post, or a marketing task with a deadline.</p>'
+    }
+  </section>`;
 }
