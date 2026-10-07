@@ -1,0 +1,56 @@
+// Partner validation + save, shared by /api/partners and /api/activities.
+
+import { int, isDate, now, oneOf, str, uuid } from './db.js';
+
+export const TYPES = ['hotel', 'guesthouse', 'ota', 'cafe', 'other'];
+const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined'];
+
+const FIELDS = {
+  name: (v) => str(v, 200),
+  type: (v) => oneOf(v, TYPES, 'hotel'),
+  area: (v) => str(v, 100),
+  address: (v) => str(v, 300),
+  website: (v) => str(v, 300),
+  phone: (v) => str(v, 60),
+  email: (v) => str(v, 200),
+  rooms: (v) => int(v, 0, 100000),
+  stars: (v) => int(v, 1, 5),
+  stage: (v) => oneOf(v, STAGES, 'new'),
+  interest: (v) => int(v, 1, 3),
+  affiliate_code: (v) => str(v, 100),
+  affiliate_url: (v) => str(v, 500),
+  next_follow_up: (v) => (isDate(v) ? v : null),
+  declined_reason: (v) => str(v, 500),
+  notes: (v) => str(v, 5000),
+};
+
+// Applies the allowed fields from body onto a partner row (used by activities.js too).
+export async function savePartner(db, body) {
+  const existing = body.id ? await db.prepare('SELECT * FROM partners WHERE id = ?').bind(body.id).first() : null;
+  if (body.id && !existing) return { error: 'Partner not found', status: 404 };
+  const row = existing ? { ...existing } : { id: uuid(), created_at: now(), stage: 'new', type: 'hotel' };
+  for (const [key, clean] of Object.entries(FIELDS)) {
+    if (key in body) row[key] = clean(body[key]);
+  }
+  if (!row.name) return { error: 'Name is required', status: 400 };
+  if (row.stage === 'accepted' && !row.accepted_at) row.accepted_at = now().slice(0, 10);
+  row.updated_at = now();
+
+  if (row.affiliate_code) {
+    const clash = await db
+      .prepare('SELECT name FROM partners WHERE lower(affiliate_code) = lower(?) AND id != ?')
+      .bind(row.affiliate_code, row.id)
+      .first();
+    if (clash) return { error: `Affiliate code "${row.affiliate_code}" is already used by ${clash.name}.`, status: 409 };
+  }
+
+  const cols = Object.keys(row);
+  await db
+    .prepare(
+      `INSERT INTO partners (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})
+       ON CONFLICT(id) DO UPDATE SET ${cols.filter((c) => c !== 'id').map((c) => `${c} = excluded.${c}`).join(', ')}`
+    )
+    .bind(...cols.map((c) => row[c] ?? null))
+    .run();
+  return { partner: row };
+}
