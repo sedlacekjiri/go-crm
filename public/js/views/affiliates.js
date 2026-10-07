@@ -42,7 +42,7 @@ const suggestUrl = (partner, code) =>
 export function affiliateModal(aff, partner, refresh) {
   const isNew = !aff.id;
   const m = openModal(
-    isNew ? `New front-line affiliate${partner ? ` – ${partner.name}` : ''}` : aff.name,
+    isNew ? `Add staff member${partner ? ` – ${partner.name}` : ''}` : aff.name,
     `<form>
       <div class="form-grid">
         <label class="field"><span>Name *</span><input class="input" name="name" required value="${esc(aff.name ?? '')}" placeholder="Anna Jónsdóttir" /></label>
@@ -299,7 +299,7 @@ export function wireAffiliateRows(root, sales, refresh) {
 export async function renderOverview(el, refresh, isCurrent) {
   const list = [...state.affiliates].sort((a, b) => AFFILIATE_STATUSES.findIndex((s) => s.value === a.status) - AFFILIATE_STATUSES.findIndex((s) => s.value === b.status) || a.name.localeCompare(b.name));
   if (!list.length) {
-    el.innerHTML = emptyBox('No front-line affiliates yet', '<p>Open a partner hotel and add the receptionists or concierges who want their own code.</p>');
+    el.innerHTML = emptyBox('No staff codes yet', '<p>Open a partner hotel → “Staff with personal codes” → + Add person.</p>');
     return;
   }
   el.innerHTML = '<div class="loading">Loading…</div>';

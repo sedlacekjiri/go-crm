@@ -61,7 +61,7 @@ export async function render(page, { params, refresh, isCurrent }) {
           </section>`
             : ''
         }
-        ${showAffiliate ? '<section class="card" id="perf"><div class="card-head"><h2>Affiliate</h2></div><p class="empty">Loading…</p></section>' : ''}
+        ${showAffiliate ? '<section class="card" id="perf"><div class="card-head"><h2>Partnership &amp; bookings</h2></div><p class="empty">Loading…</p></section>' : ''}
         <section class="card">
           <div class="card-head"><h2>Activity <span class="muted">(${activities.length})</span></h2></div>
           ${
@@ -181,12 +181,12 @@ async function renderPerformance(page, p, cur, isCurrent, refresh) {
   const first = sales.filter((s) => !s.is_cancelled).at(-1)?.booking_date;
   const via = (s) => people.find((a) => codeKey(a.code) === codeKey(s.affiliate_code))?.name ?? 'Hotel code';
   el.innerHTML = `
-    <div class="card-head"><h2>Affiliate</h2>${p.affiliate_code ? `<span class="sub">hotel code <span class="code">${esc(p.affiliate_code)}</span></span>` : ''}</div>
+    <div class="card-head"><h2>Partnership &amp; bookings</h2>${p.affiliate_code ? `<span class="sub">hotel code <span class="code">${esc(p.affiliate_code)}</span></span>` : ''}</div>
     ${
       p.affiliate_url
         ? `<div class="line" style="margin:0 0 14px"><span class="mono muted" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.affiliate_url)}</span><button class="btn secondary sm" data-copy>Copy link</button></div>`
         : !p.affiliate_code
-          ? '<p class="muted" style="margin-bottom:12px">No hotel code yet (Edit). Front-line people below can still have their own codes.</p>'
+          ? `<p class="muted" style="margin-bottom:12px">No hotel code yet – add it under <a class="link-btn" href="#/partner/${p.id}/edit">Edit → Partnership</a> once it’s set up in Caren. Staff below can still get their own codes.</p>`
           : ''
     }
     <div class="mini-kpis">
@@ -196,12 +196,12 @@ async function renderPerformance(page, p, cur, isCurrent, refresh) {
       ${miniKpi('First booking', first ? shortDate(first) : '–')}
     </div>
 
-    <div class="card-head" style="margin-top:18px"><h2>Front-line affiliates <span class="muted">(${people.length})</span></h2>
+    <div class="card-head" style="margin-top:18px"><h2>Staff with personal codes <span class="muted">(${people.length})</span></h2>
       ${isAdmin() ? '<button class="link-btn" data-add-aff>+ Add person</button>' : ''}</div>
     ${
       people.length
         ? `<ul class="aff-list">${affiliateRows(people, allSales)}</ul>`
-        : '<p class="muted small">Receptionists or concierges who recommend you get their own code and a commission for every completed booking. Add them here once they’re interested.</p>'
+        : `<div class="explain"><div><b>How it works</b><span>A receptionist or concierge who recommends you gets a personal code. When a guest books with it and the rental is over, they earn a commission. Once they confirm, print their business card with a QR code.</span></div></div>`
     }
 
     ${

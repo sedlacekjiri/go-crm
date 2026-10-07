@@ -19,10 +19,10 @@ export function render(page, { query, refresh, isCurrent }) {
 
   const tabs = `<nav class="tabs">${PARTNER_TYPES.map(
       (t) => `<a href="#/partners?type=${t.value}" class="${t.value === type && !isAffiliates ? 'active' : ''}">${t.label}<span class="count">${count((p) => p.type === t.value)}</span></a>`
-    ).join('')}<a href="#/partners?type=affiliates" class="${isAffiliates ? 'active' : ''}">Front-line affiliates<span class="count">${state.affiliates.length}</span></a></nav>`;
+    ).join('')}<a href="#/partners?type=affiliates" class="${isAffiliates ? 'active' : ''}">Staff codes<span class="count">${state.affiliates.length}</span></a></nav>`;
 
   if (isAffiliates) {
-    page.innerHTML = `${pageHeader('Partners', 'Front-line people with their own booking code and commission')}${tabs}<div id="affOverview"></div>`;
+    page.innerHTML = `${pageHeader('Partners', 'Receptionists and concierges with their own booking code and commission')}${tabs}<div id="affOverview"></div>`;
     return renderOverview(page.querySelector('#affOverview'), refresh, isCurrent);
   }
 
@@ -30,7 +30,7 @@ export function render(page, { query, refresh, isCurrent }) {
     ${pageHeader(
       'Partners',
       'Hotels, guesthouses, OTAs and cafés in the capital region',
-      isAdmin() ? `<button class="btn secondary" data-bulk>Bulk add</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
+      isAdmin() ? `<button class="btn secondary" data-bulk>Add many at once</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
     )}
     ${tabs}
     <div class="toolbar">

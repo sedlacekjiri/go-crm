@@ -722,3 +722,42 @@ button.row:hover { background: var(--surface-2); }
   .aff-acts { justify-content: flex-start; }
   .bcard-preview { padding: 10px; overflow-x: auto; justify-content: flex-start; }
 }
+
+/* ── Step-by-step partner form ─────────── */
+.step { display: flex; flex-direction: column; gap: 14px; }
+.step-head { display: flex; gap: 12px; align-items: flex-start; }
+.step-head h2 { font-size: 16px; font-weight: 700; }
+.step-head p { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+.step-n {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--btn); color: var(--btn-text); flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;
+}
+.input-lg { font-size: 17px; font-weight: 600; min-height: 48px; }
+.stage-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.stage-card {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; border: 1.5px solid var(--border); background: var(--surface);
+  border-radius: 14px; padding: 12px; color: var(--text); min-width: 0;
+}
+.stage-card b { font-size: 14px; }
+.stage-card span { font-size: 12px; color: var(--text-2); line-height: 1.35; }
+.stage-card:hover { background: var(--surface-2); }
+.stage-card[aria-pressed="true"] { border-color: var(--btn); background: var(--btn); color: var(--btn-text); }
+.stage-card[aria-pressed="true"] span { color: color-mix(in srgb, var(--btn-text) 75%, transparent); }
+.hint { font-size: 12px; color: var(--good); font-weight: 600; min-height: 0; }
+.hint:empty { display: none; }
+.follow-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.follow-row .input { width: auto; }
+.explain { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.explain > div { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+.explain b { font-size: 13px; }
+.explain span { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+.more-fields summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-2); padding: 4px 0; }
+.more-fields[open] summary { margin-bottom: 10px; }
+.form-actions { display: flex; gap: 8px; position: sticky; bottom: 0; z-index: 5; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--border); }
+@media (max-width: 860px) {
+  .stage-cards { grid-template-columns: minmax(0, 1fr); }
+  .stage-card { flex-direction: row; align-items: baseline; gap: 10px; padding: 11px 12px; }
+  .stage-card b { min-width: 74px; }
+  .form-actions { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .form-actions .btn { flex: 1; }
+}
