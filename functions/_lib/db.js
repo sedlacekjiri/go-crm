@@ -192,6 +192,7 @@ const SCHEMA = [
 const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN category TEXT NOT NULL DEFAULT 'sales'`,
   `ALTER TABLE tasks ADD COLUMN start_date TEXT`,
+  `ALTER TABLE tasks ADD COLUMN subtasks TEXT`, // JSON: [{ id, title, done }]
 ];
 
 let schemaReady = false;
@@ -232,6 +233,16 @@ export const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test
 export const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 export const now = () => new Date().toISOString();
 export const uuid = () => crypto.randomUUID();
+
+// tasks.subtasks is stored as JSON text.
+export function parseSubtasks(v) {
+  try {
+    const list = v ? JSON.parse(v) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
 
 // Affiliate codes must be unique across hotels and front-line people. Returns the owner's name or null.
 export async function codeOwner(db, code, { partnerId = '', affiliateId = '' } = {}) {

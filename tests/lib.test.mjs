@@ -334,3 +334,11 @@ describe('front-line affiliates', () => {
     assert.equal(bySource.find((r) => r.code === 'anna-borg' || r.code === 'ANNA-BORG').affiliate.name, 'Anna');
   });
 });
+
+describe('subtasks', () => {
+  it('reports checklist progress', async () => {
+    const { subtaskProgress } = await import('../public/js/lib.js');
+    assert.deepEqual(subtaskProgress({ subtasks: [{ done: true }, { done: false }, { done: true }] }), { done: 2, total: 3 });
+    assert.deepEqual(subtaskProgress({}), { done: 0, total: 0 });
+  });
+});

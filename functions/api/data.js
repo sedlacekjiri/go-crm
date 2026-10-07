@@ -2,7 +2,7 @@
 // tasks, marketing posts, goals.
 // The data set is small (hundreds of partners), so the page loads it all at once.
 
-import { authorize, json } from '../_lib/db.js';
+import { authorize, json, parseSubtasks } from '../_lib/db.js';
 
 export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
@@ -25,7 +25,7 @@ export async function onRequestGet({ request, env }) {
     partners: partners.results,
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
     activities: activities.results,
-    tasks: tasks.results.map((t) => ({ ...t, done: !!t.done })),
+    tasks: tasks.results.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [] })),
     affiliates: affiliates.results,
     payouts: payouts.results,

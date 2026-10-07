@@ -1,7 +1,7 @@
 // Tasks & calendar: hotel visits, to-dos with deadlines, follow-ups and marketing posts – split into
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
-import { agenda, AREAS, daysLeft, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
+import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
@@ -11,6 +11,8 @@ import { logActivity } from './partner.js';
 let selected = null;
 let mode = 'week';
 let category = ''; // '' | 'sales' | 'marketing'
+const expanded = new Set(); // tasks whose checklist is open
+let refocus = null; // task id whose "add subtask" input should get focus after a redraw
 
 const dayTitle = (d) => {
   const t = today();
@@ -68,8 +70,32 @@ export function render(page, ctx) {
           .filter(Boolean)
           .join(' · ')}</div>
       </div>
+      ${task.type !== 'visit' ? subtaskToggle(task) : ''}
       ${admin ? `<div class="acts">${task.type === 'visit' && !task.done ? `<button class="btn sm" data-log="${task.partner_id}">Log visit</button>` : ''}${showDate ? `<button class="btn secondary sm" data-today="${task.id}">Move to today</button>` : ''}<button class="icon-btn round sm" data-menu-task="${task.id}" aria-label="More">⋯</button></div>` : ''}
+      ${task.type !== 'visit' && expanded.has(task.id) ? subtaskList(task) : ''}
     </li>`;
+
+  const subtaskToggle = (task) => {
+    const { done, total } = subtaskProgress(task);
+    if (!total && !admin) return '';
+    const open = expanded.has(task.id);
+    return `<button type="button" class="sub-toggle ${total && done === total ? 'complete' : ''}" data-expand="${task.id}" aria-expanded="${open}">
+      ${total ? `<span class="sub-bar"><i style="width:${(done / total) * 100}%"></i></span>${done}/${total}` : '+ Subtasks'}<span class="chev">${open ? '▴' : '▾'}</span></button>`;
+  };
+
+  const subtaskList = (task) => `<div class="subtasks">
+      <ul>${(task.subtasks ?? [])
+        .map(
+          (st) => `<li class="${st.done ? 'done' : ''}">
+            ${admin ? `<button type="button" class="tick sm ${st.done ? 'on' : ''}" data-sub-toggle="${task.id}" data-sub="${esc(st.id)}" aria-label="${st.done ? 'Mark not done' : 'Mark done'}">${st.done ? '✓' : ''}</button>` : `<span class="tick sm ${st.done ? 'on' : ''}">${st.done ? '✓' : ''}</span>`}
+            <span class="st-title">${esc(st.title)}</span>
+            ${admin ? `<button type="button" class="link-btn muted" data-sub-del="${task.id}" data-sub="${esc(st.id)}" aria-label="Remove subtask">×</button>` : ''}
+          </li>`
+        )
+        .join('')}</ul>
+      ${admin ? `<form class="sub-add" data-sub-add="${task.id}"><input class="input" name="title" placeholder="Add a subtask and press Enter" autocomplete="off" /><button class="btn secondary sm" type="submit">Add</button></form>` : ''}
+      ${subtaskProgress(task).total && subtaskProgress(task).done === subtaskProgress(task).total && !task.done && admin ? `<button type="button" class="link-btn" data-toggle="${task.id}">All subtasks done – tick the whole task ✓</button>` : ''}
+    </div>`;
 
   const postRow = (p, showDate = false) => `<li class="task">
       <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
@@ -140,6 +166,21 @@ export function render(page, ctx) {
 
   // ── Events ──
   const rerender = () => render(page, ctx);
+  page.querySelectorAll('[data-sub-add]').forEach((f) =>
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = f.title.value.trim();
+      if (!title) return;
+      const task = state.tasks.find((x) => x.id === f.dataset.subAdd);
+      const list = [...(task.subtasks ?? []), { title, done: false }];
+      refocus = task.id;
+      save({ id: task.id, subtasks: list }, null, ctx.refresh);
+    })
+  );
+  if (refocus) {
+    page.querySelector(`[data-sub-add="${refocus}"] input`)?.focus();
+    refocus = null;
+  }
   onSeg(page, 'mode', (m) => {
     mode = m;
     rerender();
@@ -148,7 +189,22 @@ export function render(page, ctx) {
     const el = e.target.closest('button');
     if (!el) return;
     const d = el.dataset;
-    if (d.cat !== undefined) {
+    if (d.expand) {
+      if (expanded.has(d.expand)) expanded.delete(d.expand);
+      else {
+        expanded.add(d.expand);
+        refocus = d.expand;
+      }
+      rerender();
+    } else if (d.subToggle || d.subDel) {
+      const task = state.tasks.find((x) => x.id === (d.subToggle || d.subDel));
+      const list = (task.subtasks ?? [])
+        .map((st) => (d.subToggle && st.id === d.sub ? { ...st, done: !st.done } : st))
+        .filter((st) => !(d.subDel && st.id === d.sub));
+      task.subtasks = list; // instant feedback, then save
+      rerender();
+      save({ id: task.id, subtasks: list }, null, ctx.refresh);
+    } else if (d.cat !== undefined) {
       category = d.cat;
       rerender();
     } else if (d.post) postModal(state.posts.find((x) => x.id === d.post), ctx.refresh);
@@ -195,7 +251,7 @@ function deadlinePill(task, isOverdueList) {
 async function save(body, message, refresh, path = '/api/tasks') {
   try {
     await api(path, { method: 'POST', body });
-    toast(message);
+    if (message) toast(message);
     refresh();
   } catch (err) {
     toast(err.message, 'error');
@@ -338,6 +394,8 @@ export function taskModal(task, refresh) {
             )}</select></label>`
       }
       <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2">${esc(task.notes ?? '')}</textarea></label>
+      ${isVisit ? '' : `<div class="field"><span>Subtasks</span><ul class="sub-edit" data-sub-edit></ul>
+        <div class="sub-add"><input class="input" data-sub-new placeholder="Add a step and press Enter" autocomplete="off" /><button class="btn secondary sm" type="button" data-sub-new-btn>Add</button></div></div>`}
       <button class="btn block" type="submit">${task.id ? 'Save' : 'Add task'}</button>
       ${task.id ? `<button class="btn danger block" type="button" data-remove>${isVisit ? 'Remove from plan' : 'Delete task'}</button>` : ''}
     </form>`
@@ -345,6 +403,47 @@ export function taskModal(task, refresh) {
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
   let cat = task.category || 'sales';
+  // Checklist editor (kept in memory, saved with the task).
+  let subs = (task.subtasks ?? []).map((s) => ({ ...s }));
+  const subList = m.el.querySelector('[data-sub-edit]');
+  const drawSubs = () => {
+    if (!subList) return;
+    subList.innerHTML = subs
+      .map(
+        (s, i) => `<li><input type="checkbox" data-i="${i}" ${s.done ? 'checked' : ''} aria-label="Done" />
+          <input class="input" data-t="${i}" value="${esc(s.title)}" /><button type="button" class="link-btn muted" data-x="${i}" aria-label="Remove">×</button></li>`
+      )
+      .join('');
+  };
+  drawSubs();
+  subList?.addEventListener('change', (e) => {
+    const i = e.target.dataset.i ?? e.target.dataset.t;
+    if (i === undefined) return;
+    if (e.target.dataset.i !== undefined) subs[i].done = e.target.checked;
+    else subs[i].title = e.target.value;
+  });
+  subList?.addEventListener('click', (e) => {
+    const x = e.target.closest('[data-x]');
+    if (!x) return;
+    subs.splice(Number(x.dataset.x), 1);
+    drawSubs();
+  });
+  const addSub = () => {
+    const input = m.el.querySelector('[data-sub-new]');
+    const title = input.value.trim();
+    if (!title) return;
+    subs.push({ title, done: false });
+    input.value = '';
+    drawSubs();
+    input.focus();
+  };
+  m.el.querySelector('[data-sub-new]')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addSub();
+    }
+  });
+  m.el.querySelector('[data-sub-new-btn]')?.addEventListener('click', addSub);
   m.el.querySelector('[data-category]')?.addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
     if (!b) return;
@@ -353,7 +452,8 @@ export function taskModal(task, refresh) {
   });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const body = { ...formData(form), type: task.type, id: task.id, ...(isVisit ? {} : { category: cat }) };
+    const f = formData(form);
+    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs }) };
     if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
       await api('/api/tasks', { method: 'POST', body });

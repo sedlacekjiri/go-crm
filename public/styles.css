@@ -761,3 +761,35 @@ button.row:hover { background: var(--surface-2); }
   .form-actions { bottom: calc(64px + env(safe-area-inset-bottom)); }
   .form-actions .btn { flex: 1; }
 }
+
+/* ── Subtasks ──────────────────────────── */
+.task { flex-wrap: wrap; }
+.sub-toggle {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); border-radius: 999px;
+  padding: 3px 10px; font-size: 12px; font-weight: 600; color: var(--text-2); flex-shrink: 0; font-variant-numeric: tabular-nums;
+}
+.sub-toggle:hover { color: var(--text); background: var(--surface-2); }
+.sub-toggle.complete { color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.sub-toggle .chev { font-size: 10px; color: var(--text-3); }
+.sub-bar { width: 34px; height: 5px; border-radius: 99px; background: var(--surface-2); overflow: hidden; display: inline-block; }
+.sub-bar i { display: block; height: 100%; background: var(--good); border-radius: 99px; }
+.subtasks { flex-basis: 100%; padding: 4px 0 2px 36px; display: flex; flex-direction: column; gap: 6px; }
+.subtasks ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.subtasks li { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 13px; }
+.subtasks li .st-title { flex: 1; min-width: 0; }
+.subtasks li.done .st-title { color: var(--text-3); text-decoration: line-through; }
+.subtasks li .link-btn { opacity: 0; font-size: 16px; padding: 0 4px; }
+.subtasks li:hover .link-btn { opacity: 1; }
+.task .tick.sm { width: 18px; height: 18px; font-size: 10px; border-width: 1.5px; }
+.sub-add { display: flex; gap: 6px; align-items: center; }
+.sub-add .input { min-height: 34px; padding: 6px 10px; font-size: 13px; }
+.sub-edit { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.sub-edit:empty { display: none; }
+.sub-edit li { display: flex; gap: 8px; align-items: center; }
+.sub-edit input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--good); flex-shrink: 0; }
+.sub-edit .input { min-height: 34px; padding: 6px 10px; font-size: 13px; }
+@media (max-width: 680px) {
+  .subtasks { padding-left: 12px; }
+  .subtasks li .link-btn { opacity: 1; }
+}
+.subtasks > .link-btn { align-self: flex-start; text-align: left; }

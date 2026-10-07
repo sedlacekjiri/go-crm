@@ -2,10 +2,11 @@
 //   POST { id?, type, category, title, partner_id, start_date, due_date, due_time, notes, done }
 //        create / update (only sent fields). due_date is the deadline; start_date (optional)
 //        makes it a multi-day task shown as "in progress" from that day.
+//        subtasks: [{ id?, title, done }] – a checklist inside the task (replaces the whole list).
 //   POST { plan: { date: "YYYY-MM-DD", partner_ids: [...] } }              plan visits for a day
 //   DELETE ?id=…
 
-import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const TYPES = ['todo', 'visit'];
 const CATEGORIES = ['sales', 'marketing'];
@@ -51,6 +52,14 @@ export async function onRequestPost({ request, env }) {
   if ('due_date' in b) row.due_date = isDate(b.due_date) ? b.due_date : null;
   if ('due_time' in b) row.due_time = isTime(b.due_time) ? b.due_time : null;
   if ('notes' in b) row.notes = str(b.notes, 2000);
+  if ('subtasks' in b) {
+    if (!Array.isArray(b.subtasks)) return bad('Invalid subtasks');
+    const list = b.subtasks
+      .map((s) => ({ id: str(s?.id, 64) || uuid(), title: str(s?.title, 200), done: !!s?.done }))
+      .filter((s) => s.title)
+      .slice(0, 50);
+    row.subtasks = list.length ? JSON.stringify(list) : null;
+  }
   if ('done' in b) {
     row.done = b.done ? 1 : 0;
     row.done_at = b.done ? existing?.done_at || now() : null;
@@ -65,7 +74,7 @@ export async function onRequestPost({ request, env }) {
     if (!p) return bad('Partner not found', 404);
   }
 
-  const cols = ['id', 'type', 'category', 'title', 'partner_id', 'start_date', 'due_date', 'due_time', 'notes', 'done', 'done_at', 'created_at'];
+  const cols = ['id', 'type', 'category', 'title', 'partner_id', 'start_date', 'due_date', 'due_time', 'notes', 'subtasks', 'done', 'done_at', 'created_at'];
   await db
     .prepare(
       `INSERT INTO tasks (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})
@@ -73,7 +82,7 @@ export async function onRequestPost({ request, env }) {
     )
     .bind(...cols.map((c) => row[c] ?? null))
     .run();
-  return json({ ...row, done: !!row.done });
+  return json({ ...row, done: !!row.done, subtasks: parseSubtasks(row.subtasks) });
 }
 
 export async function onRequestDelete({ request, env }) {

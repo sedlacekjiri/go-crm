@@ -605,6 +605,12 @@ export function agenda(date, { tasks, partners, posts = [] }, category = '') {
   return { visits, todos, ongoing, followUps, posts: dayPosts };
 }
 
+// Checklist progress inside a task.
+export function subtaskProgress(task) {
+  const list = task.subtasks ?? [];
+  return { done: list.filter((s) => s.done).length, total: list.length };
+}
+
 // Days left until a deadline (negative = late).
 export const daysLeft = (deadline, from = today()) => daysBetween(from, deadline);
 
