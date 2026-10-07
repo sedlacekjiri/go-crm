@@ -1,7 +1,8 @@
 // One partner: pipeline controls, quick visit logging, contacts, activity log, affiliate results.
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
-import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
+import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
+import { planVisits } from './tasks.js';
 import { copyText, dateTime, esc, formData, fullDate, money, nowLocalInput, openModal, options, shortDate, toast } from '../util.js';
 
 const FOLLOW_UPS = [
@@ -20,6 +21,7 @@ export async function render(page, { params, refresh, isCurrent }) {
   const contacts = state.contacts.filter((c) => c.partner_id === p.id);
   const activities = state.activities.filter((a) => a.partner_id === p.id);
   const visits = visitStats(activities).get(p.id);
+  const planned = nextPlannedVisit(p.id, state.tasks);
   const admin = isAdmin();
   const cur = currency.value;
   const open = !['accepted', 'declined'].includes(p.stage);
@@ -29,11 +31,11 @@ export async function render(page, { params, refresh, isCurrent }) {
     <div class="detail-head">
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
-        <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}
+        <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
           <span class="muted small">${esc([typeLabel(p.type), p.area, p.rooms ? `${p.rooms} rooms` : null, p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>
-      ${admin ? `<div class="controls"><a class="btn secondary" href="#/partner/${p.id}/edit">Edit</a><button class="btn" data-log>+ Log visit</button></div>` : ''}
+      ${admin ? `<div class="controls"><a class="btn secondary" href="#/partner/${p.id}/edit">Edit</a><button class="btn secondary" data-plan-visit>Plan visit</button><button class="btn" data-log>+ Log visit</button></div>` : ''}
     </div>
 
     <div class="grid grid-side" style="margin-top:0">
@@ -137,6 +139,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
     else if ('log' in d) logActivity(p, contacts, refresh);
+    else if ('planVisit' in d) planVisits(planned ?? shiftDate(today(), 1), refresh, [p.id]);
     else if (d.contact) contactForm(p, d.contact === 'new' ? { is_primary: contacts.length === 0 } : contacts.find((c) => c.id === d.contact), refresh);
     else if (d.delContact && confirm('Remove this contact?')) remove(`/api/contacts?id=${d.delContact}`, refresh);
     else if (d.delActivity && confirm('Delete this entry?')) remove(`/api/activities?id=${d.delActivity}`, refresh);
@@ -204,7 +207,7 @@ async function renderPerformance(page, p, cur, isCurrent) {
   el.querySelector('[data-copy]')?.addEventListener('click', () => copyText(p.affiliate_url));
 }
 
-function logActivity(p, contacts, refresh) {
+export function logActivity(p, contacts, refresh) {
   const nextStage = p.stage === 'new' ? 'contacted' : p.stage;
   const m = openModal(
     `Log visit – ${p.name}`,
@@ -251,7 +254,8 @@ function logActivity(p, contacts, refresh) {
     try {
       await api('/api/activities', {
         method: 'POST',
-        body: { partner_id: p.id, type, happened_at: new Date(f.when).toISOString(), contact_id: f.contact_id || null, summary: f.summary, partner },
+        // local_date lets the server tick off visits planned up to this (local) day
+        body: { partner_id: p.id, type, happened_at: new Date(f.when).toISOString(), local_date: f.when.slice(0, 10), contact_id: f.contact_id || null, summary: f.summary, partner },
       });
       m.close();
       toast('Logged');

@@ -4,6 +4,8 @@ import { followUpPill, kpi, stageBadge } from '../components.js';
 import {
   activityLabel,
   actuals,
+  agenda,
+  overdue,
   GOAL_METRICS,
   isPartnerSale,
   monthElapsed,
@@ -36,9 +38,14 @@ export async function render(page, { isCurrent }) {
   const p30 = totals(partnerSales.filter(last30), cur);
   const all30 = totals(sales.filter(last30), cur);
   const count = (stage) => state.partners.filter((p) => p.stage === stage).length;
-  const followUps = state.partners
-    .filter((p) => p.next_follow_up && p.next_follow_up <= shiftDate(t, 7) && !['accepted', 'declined'].includes(p.stage))
-    .sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up));
+  const day = agenda(t, state);
+  const late = overdue(t, state);
+  const lateCount = late.tasks.length + late.followUps.length;
+  const todayItems = [
+    ...day.visits.map((v) => ({ title: v.partner.name, sub: `Visit · ${v.partner.area ?? ''}`, href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
+    ...day.followUps.map((p) => ({ title: p.name, sub: `Follow-up · ${STAGES.find((s) => s.value === p.stage)?.label}`, href: `#/partner/${p.id}`, done: false, pill: followUpPill(p.next_follow_up) })),
+    ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time, x.partner?.name].filter(Boolean).join(' · '), href: '#/tasks', done: x.done, pill: x.done ? '<span class="pill good">Done</span>' : '' })),
+  ];
   const actual = actuals(month, { ...state, sales });
   const target = Object.fromEntries(state.goals.filter((g) => g.month === month).map((g) => [g.metric, g.target]));
   const elapsed = monthElapsed(month);
@@ -70,19 +77,18 @@ export async function render(page, { isCurrent }) {
         <div id="dashChart"></div>
       </section>
       <section class="card">
-        <div class="card-head"><h2>Follow-ups</h2><span class="sub">next 7 days</span></div>
+        <div class="card-head"><h2>Today</h2><a class="link-btn" href="#/tasks">Tasks →</a></div>
         ${
-          followUps.length
-            ? `<div class="list">${followUps
+          todayItems.length
+            ? `<div class="list">${todayItems
                 .slice(0, 8)
                 .map(
-                  (p) => `<a class="row" href="#/partner/${p.id}">
-                    <span class="name"><b>${esc(p.name)}</b><br><span class="muted small">${esc(STAGES.find((s) => s.value === p.stage)?.label)}</span></span>
-                    ${followUpPill(p.next_follow_up)}</a>`
+                  (x) => `<a class="row" href="${x.href}"><span class="name">${x.done ? '<span class="muted">✓ </span>' : ''}<b>${esc(x.title)}</b><br><span class="muted small">${esc(x.sub)}</span></span>${x.pill}</a>`
                 )
-                .join('')}${followUps.length > 8 ? `<p class="muted small" style="padding:6px 8px">+ ${followUps.length - 8} more</p>` : ''}</div>`
-            : `<p class="empty">Nothing due. ${count('new') ? `<a class="link-btn" href="#/pipeline">${count('new')} partners not visited yet →</a>` : ''}</p>`
+                .join('')}${todayItems.length > 8 ? `<a class="link-btn" style="padding:6px 8px" href="#/tasks">+ ${todayItems.length - 8} more</a>` : ''}</div>`
+            : `<p class="empty">Nothing planned for today. ${isAdmin() ? '<a class="link-btn" href="#/tasks">Plan visits →</a>' : ''}</p>`
         }
+        ${lateCount ? `<a class="pill overdue" style="margin-top:10px" href="#/tasks">⚠ ${lateCount} overdue</a>` : ''}
       </section>
     </div>
 

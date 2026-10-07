@@ -88,6 +88,20 @@ const SCHEMA = [
     imported_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS sales_date ON sales (booking_date)`,
+  `CREATE TABLE IF NOT EXISTS tasks (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL DEFAULT 'todo',
+    title TEXT,
+    partner_id TEXT,
+    due_date TEXT NOT NULL,
+    due_time TEXT,
+    notes TEXT,
+    done INTEGER NOT NULL DEFAULT 0,
+    done_at TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS tasks_due ON tasks (done, due_date)`,
+  `CREATE INDEX IF NOT EXISTS tasks_partner ON tasks (partner_id, done)`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,

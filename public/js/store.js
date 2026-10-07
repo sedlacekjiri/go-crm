@@ -49,6 +49,7 @@ export const state = {
   partners: [],
   contacts: [],
   activities: [],
+  tasks: [],
   goals: [],
   salesInfo: null,
 };

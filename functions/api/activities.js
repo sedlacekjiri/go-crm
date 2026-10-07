@@ -3,7 +3,7 @@
 //          `partner` is optional: logging a visit can move the partner on and set the next follow-up.
 //   DELETE ?id=…
 
-import { authorize, bad, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
 import { savePartner } from '../_lib/partners.js';
 
 const TYPES = ['visit', 'meeting', 'call', 'email', 'note'];
@@ -27,11 +27,23 @@ export async function onRequestPost({ request, env }) {
     summary: str(b.summary, 5000),
     created_at: now(),
   };
-  await env.DB.prepare(
-    `INSERT INTO activities (id, partner_id, contact_id, type, happened_at, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(row.id, row.partner_id, row.contact_id, row.type, row.happened_at, row.summary, row.created_at)
-    .run();
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO activities (id, partner_id, contact_id, type, happened_at, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(row.id, row.partner_id, row.contact_id, row.type, row.happened_at, row.summary, row.created_at),
+  ];
+  // A visit ticks off the planned visit(s) for this partner up to that day (the page sends its local date).
+  if (row.type === 'visit' || row.type === 'meeting') {
+    const day = isDate(b.local_date) ? b.local_date : row.happened_at.slice(0, 10);
+    statements.push(
+      env.DB.prepare(`UPDATE tasks SET done = 1, done_at = ? WHERE partner_id = ? AND type = 'visit' AND done = 0 AND due_date <= ?`).bind(
+        now(),
+        row.partner_id,
+        day
+      )
+    );
+  }
+  await env.DB.batch(statements);
 
   if (b.partner && typeof b.partner === 'object') {
     const patch = {};

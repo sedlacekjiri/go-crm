@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   actuals,
+  agenda,
+  dayCounts,
+  dueCount,
+  monthGrid,
+  nextPlannedVisit,
+  overdue,
+  weekDays,
   bucketKeys,
   buildSales,
   convert,
@@ -196,5 +203,47 @@ describe('visitStats', () => {
     ]);
     assert.deepEqual(stats.get('a'), { count: 2, last: '2026-10-05T10:00:00.000Z' });
     assert.equal(stats.has('b'), false);
+  });
+});
+
+describe('tasks & calendar', () => {
+  const partners = [
+    { id: 'a', name: 'Hotel B', area: '105 Hlíðar', stage: 'new', next_follow_up: null },
+    { id: 'b', name: 'Hotel A', area: '101 Miðborg', stage: 'contacted', next_follow_up: '2026-10-08' },
+    { id: 'c', name: 'Hotel C', area: '101 Miðborg', stage: 'in_talks', next_follow_up: '2026-10-05' },
+    { id: 'd', name: 'Done Hotel', area: '101 Miðborg', stage: 'accepted', next_follow_up: '2026-10-01' },
+  ];
+  const tasks = [
+    { id: 1, type: 'visit', partner_id: 'a', due_date: '2026-10-08', done: false },
+    { id: 2, type: 'visit', partner_id: 'b', due_date: '2026-10-08', done: false },
+    { id: 3, type: 'todo', title: 'Print flyers', due_date: '2026-10-08', due_time: '09:00', done: false },
+    { id: 4, type: 'todo', title: 'Old', due_date: '2026-10-03', done: false },
+    { id: 5, type: 'visit', partner_id: 'gone', due_date: '2026-10-03', done: false },
+    { id: 6, type: 'visit', partner_id: 'a', due_date: '2026-10-12', done: false },
+  ];
+  it('builds week and month grids from Monday', () => {
+    assert.deepEqual(weekDays('2026-10-08'), ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
+    const g = monthGrid('2026-10');
+    assert.equal(g.length, 42);
+    assert.equal(g[0], '2026-09-28');
+  });
+  it('lists a day: visits by area, follow-ups not duplicated', () => {
+    const a = agenda('2026-10-08', { tasks, partners });
+    assert.deepEqual(a.visits.map((v) => v.partner.name), ['Hotel A', 'Hotel B']);
+    assert.deepEqual(a.todos.map((t) => t.title), ['Print flyers']);
+    assert.deepEqual(a.followUps, []); // Hotel A's follow-up is covered by its planned visit
+  });
+  it('finds overdue items, ignoring deleted partners and closed stages', () => {
+    const o = overdue('2026-10-08', { tasks, partners });
+    assert.deepEqual(o.tasks.map((t) => t.id), [4]);
+    assert.deepEqual(o.followUps.map((p) => p.id), ['c']);
+    assert.equal(dueCount('2026-10-08', { tasks, partners }), 3 + 1 + 2); // 3 open today + 1 old todo + follow-ups b, c
+  });
+  it('counts markers and finds the next planned visit', () => {
+    const c = dayCounts(['2026-10-08', '2026-10-09'], { tasks, partners });
+    assert.deepEqual(c.get('2026-10-08'), { visits: 2, todos: 1, followUps: 0, open: 3 });
+    assert.equal(c.get('2026-10-09').open, 0);
+    assert.equal(nextPlannedVisit('a', tasks), '2026-10-08');
+    assert.equal(nextPlannedVisit('c', tasks), null);
   });
 });

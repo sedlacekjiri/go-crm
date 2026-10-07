@@ -6,6 +6,8 @@ Push to GitHub → Cloudflare deploys it.
 
 - **Partners**: hotels, guesthouses, OTAs, cafés · Reykjavík districts + capital region · contact people · bulk add
 - **Pipeline**: New → Contacted → In talks → Accepted / Declined, plus interest Cold / Warm / Hot
+- **Tasks & calendar**: plan which hotels to visit on which day (grouped by area), to-dos, follow-ups;
+  logging a visit ticks the planned visit off automatically
 - **Visit log** with follow-up reminders (the "+ Log visit" button on the phone)
 - **Sales**: import of the Caren (booking.caren.is) export, revenue by day / week / month,
   Go Car Rentals vs Go Campers, EUR ⇄ ISK (daily ECB rates), attribution by affiliate code
@@ -50,10 +52,10 @@ Amounts are converted to EUR and ISK with the ECB rate of the booking date
 ```
 public/index.html, styles.css     the page and its look
 public/js/app.js                  login, navigation, router
-public/js/views/*.js              Home, Partners, Partner, Pipeline, Sales, Import, Goals
+public/js/views/*.js              Home, Partners, Partner, Tasks, Pipeline, Sales, Import, Goals
 public/js/lib.js                  pure logic: import parsing, FX, analytics, goals (tested)
 functions/api/*.js                the API (Cloudflare Pages Functions) – data, partners, contacts,
-                                  activities, sales, goals
+                                  activities, tasks, sales, goals
 functions/_lib/db.js              password check, D1 tables
 tests/lib.test.mjs                unit tests
 ```

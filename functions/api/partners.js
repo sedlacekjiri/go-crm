@@ -43,6 +43,7 @@ export async function onRequestDelete({ request, env }) {
   if (!id) return bad('Missing id');
   await env.DB.batch([
     env.DB.prepare('DELETE FROM activities WHERE partner_id = ?').bind(id),
+    env.DB.prepare('DELETE FROM tasks WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM contacts WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM partners WHERE id = ?').bind(id),
   ]);

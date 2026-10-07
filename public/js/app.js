@@ -1,5 +1,5 @@
 // Entry point: login, navigation (sidebar / phone tab bar), hash router.
-import { today } from './lib.js';
+import { dueCount, today } from './lib.js';
 import { ICONS, seg } from './components.js';
 import { currency, hasToken, isAdmin, loadData, loadTodayRate, setToken, state } from './store.js';
 import { $, esc, openModal, storage, toast } from './util.js';
@@ -11,10 +11,12 @@ import * as partnerForm from './views/partner-form.js';
 import * as partners from './views/partners.js';
 import * as pipeline from './views/pipeline.js';
 import * as sales from './views/sales.js';
+import * as tasks from './views/tasks.js';
 
 const NAV = [
   { href: '#/', key: 'home', label: 'Home', icon: ICONS.home },
   { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners },
+  { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks },
   { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline },
   { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales },
   { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals },
@@ -26,6 +28,7 @@ const ROUTES = [
   { re: /^\/partners\/new$/, nav: 'partners', view: partnerForm },
   { re: /^\/partner\/([\w-]+)$/, nav: 'partners', view: partner },
   { re: /^\/partner\/([\w-]+)\/edit$/, nav: 'partners', view: partnerForm },
+  { re: /^\/tasks$/, nav: 'tasks', view: tasks },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },
@@ -72,17 +75,16 @@ function highlightNav(key) {
 }
 
 function updateBadges() {
-  const t = today();
-  const overdue = state.partners.filter((p) => p.next_follow_up && p.next_follow_up <= t && !['accepted', 'declined'].includes(p.stage)).length;
-  document.querySelectorAll('[data-nav="home"] .badge-count').forEach((b) => {
-    b.textContent = overdue;
-    b.hidden = !overdue;
+  const due = dueCount(today(), state);
+  document.querySelectorAll('[data-nav="tasks"] .badge-count').forEach((b) => {
+    b.textContent = due;
+    b.hidden = !due;
   });
 }
 
 function buildNav() {
   const item = (n) =>
-    `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'home' ? '<em class="badge-count" hidden title="Follow-ups due"></em>' : ''}</a>`;
+    `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
   $('#nav').innerHTML = NAV.map(item).join('');
   $('#tabbar').innerHTML = NAV.map(item).join('');
   $('#roleNote').textContent = isAdmin() ? 'Admin' : 'View only';

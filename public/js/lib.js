@@ -424,3 +424,70 @@ export function actuals(month, { activities, partners, sales }) {
     revenue_eur: partnerSales.reduce((sum, s) => sum + Number(s.amount_eur), 0),
   };
 }
+
+// ── Tasks & calendar ───────────────────────────────────────────
+const isOpenStage = (p) => p.stage !== 'accepted' && p.stage !== 'declined';
+
+// Monday → Sunday of the week containing `date`.
+export const weekDays = (date) => Array.from({ length: 7 }, (_, i) => shiftDate(weekStart(date), i));
+
+// 6 weeks × 7 days covering the month, starting on a Monday.
+export const monthGrid = (month) => Array.from({ length: 42 }, (_, i) => shiftDate(weekStart(`${month}-01`), i));
+
+// What is on one day: planned visits (sorted by area = walking route), to-dos and partner follow-ups.
+export function agenda(date, { tasks, partners }) {
+  const byId = new Map(partners.map((p) => [p.id, p]));
+  const onDay = tasks.filter((t) => t.due_date === date);
+  const visits = onDay
+    .filter((t) => t.type === 'visit')
+    .map((t) => ({ ...t, partner: byId.get(t.partner_id) }))
+    .filter((t) => t.partner)
+    .sort((a, b) => a.done - b.done || (a.partner.area ?? '~').localeCompare(b.partner.area ?? '~') || a.partner.name.localeCompare(b.partner.name));
+  const todos = onDay
+    .filter((t) => t.type !== 'visit')
+    .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
+    .sort((a, b) => a.done - b.done || (a.due_time ?? '99').localeCompare(b.due_time ?? '99'));
+  const planned = new Set(onDay.filter((t) => t.type === 'visit').map((t) => t.partner_id));
+  // A follow-up already covered by a planned visit that day isn't listed twice.
+  const followUps = partners.filter((p) => p.next_follow_up === date && isOpenStage(p) && !planned.has(p.id));
+  return { visits, todos, followUps };
+}
+
+// Everything left undone before `date`.
+export function overdue(date, { tasks, partners }) {
+  const byId = new Map(partners.map((p) => [p.id, p]));
+  return {
+    tasks: tasks
+      .filter((t) => !t.done && t.due_date < date && (t.type !== 'visit' || byId.has(t.partner_id)))
+      .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
+      .sort((a, b) => a.due_date.localeCompare(b.due_date)),
+    followUps: partners.filter((p) => p.next_follow_up && p.next_follow_up < date && isOpenStage(p)).sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up)),
+  };
+}
+
+// Calendar markers: Map(date → { visits, todos, followUps, open }).
+export function dayCounts(dates, data) {
+  const out = new Map();
+  for (const d of dates) {
+    const a = agenda(d, data);
+    const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length;
+    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, open });
+  }
+  return out;
+}
+
+// Next open planned visit for a partner (YYYY-MM-DD) or null.
+export function nextPlannedVisit(partnerId, tasks) {
+  let best = null;
+  for (const t of tasks) if (t.type === 'visit' && !t.done && t.partner_id === partnerId && (!best || t.due_date < best)) best = t.due_date;
+  return best;
+}
+
+// Open items due today or earlier – for the nav badge.
+export function dueCount(date, { tasks, partners }) {
+  const ids = new Set(partners.map((p) => p.id));
+  return (
+    tasks.filter((t) => !t.done && t.due_date <= date && (t.type !== 'visit' || ids.has(t.partner_id))).length +
+    partners.filter((p) => p.next_follow_up && p.next_follow_up <= date && isOpenStage(p)).length
+  );
+}
