@@ -10,6 +10,9 @@ Push to GitHub → Cloudflare deploys it.
   (grouped by area), follow-ups and posts; logging a visit ticks the planned visit off automatically
 - **Marketing**: content calendar for Instagram / Facebook / TikTok / Google / YouTube, idea bank,
   Google rating & reviews (Places API)
+- **Front-line affiliates**: receptionists / concierges with their own code and commission (% or € per
+  booking), paid only for completed, not-cancelled rentals; status Offered → Confirmed → Card given,
+  printable business card with QR code, payouts and "to pay" balance
 - **Visit log** with follow-up reminders (the "+ Log visit" button on the phone)
 - **Sales**: import of the Caren (booking.caren.is) export, revenue by day / week / month,
   Go Car Rentals vs Go Campers, EUR ⇄ ISK (daily ECB rates), attribution by affiliate code

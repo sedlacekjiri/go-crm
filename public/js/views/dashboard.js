@@ -32,7 +32,7 @@ export async function render(page, { isCurrent }) {
   const sales = await loadSales(from, t);
   if (!isCurrent()) return;
 
-  const byCode = partnerByCode(state.partners);
+  const byCode = partnerByCode(state.partners, state.affiliates);
   const partnerSales = sales.filter((s) => isPartnerSale(s, byCode));
   const last30 = (s) => s.booking_date >= shiftDate(t, -29);
   const p30 = totals(partnerSales.filter(last30), cur);
@@ -51,7 +51,7 @@ export async function render(page, { isCurrent }) {
   const actual = actuals(month, { ...state, sales });
   const target = Object.fromEntries(state.goals.filter((g) => g.month === month).map((g) => [g.metric, g.target]));
   const elapsed = monthElapsed(month);
-  const top = revenueByPartner(partnerSales, state.partners, cur).slice(0, 5);
+  const top = revenueByPartner(partnerSales, state.partners, cur, state.affiliates).slice(0, 5);
   const byId = new Map(state.partners.map((p) => [p.id, p]));
   const recent = state.activities.slice(0, 8);
   const maxStage = Math.max(1, ...STAGES.map((s) => count(s.value)));

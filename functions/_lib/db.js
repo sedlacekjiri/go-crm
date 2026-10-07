@@ -153,6 +153,32 @@ const SCHEMA = [
     first_seen TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS reviews_place ON reviews (place_id, published_at)`,
+  `CREATE TABLE IF NOT EXISTS affiliates (
+    id TEXT PRIMARY KEY,
+    partner_id TEXT,
+    name TEXT NOT NULL,
+    role TEXT, email TEXT, phone TEXT,
+    code TEXT NOT NULL,
+    url TEXT,
+    commission_type TEXT NOT NULL DEFAULT 'percent',
+    commission_value REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'offered',
+    confirmed_at TEXT,
+    card_given_at TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS affiliates_code ON affiliates (lower(code))`,
+  `CREATE TABLE IF NOT EXISTS payouts (
+    id TEXT PRIMARY KEY,
+    affiliate_id TEXT NOT NULL,
+    amount_eur REAL NOT NULL,
+    paid_at TEXT NOT NULL,
+    note TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS payouts_affiliate ON payouts (affiliate_id)`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
@@ -206,3 +232,11 @@ export const isDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test
 export const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 export const now = () => new Date().toISOString();
 export const uuid = () => crypto.randomUUID();
+
+// Affiliate codes must be unique across hotels and front-line people. Returns the owner's name or null.
+export async function codeOwner(db, code, { partnerId = '', affiliateId = '' } = {}) {
+  const p = await db.prepare('SELECT name FROM partners WHERE lower(affiliate_code) = lower(?) AND id != ?').bind(code, partnerId).first();
+  if (p) return p.name;
+  const a = await db.prepare('SELECT name FROM affiliates WHERE lower(code) = lower(?) AND id != ?').bind(code, affiliateId).first();
+  return a ? a.name : null;
+}

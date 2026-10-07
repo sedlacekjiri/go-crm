@@ -435,28 +435,91 @@ export function totals(sales, cur) {
 
 export const codeKey = (code) => String(code ?? '').trim().toLowerCase();
 
-export function partnerByCode(partners) {
+// Code → hotel. Front-line people's codes count for their hotel too.
+export function partnerByCode(partners, affiliates = []) {
   const map = new Map();
+  const byId = new Map(partners.map((p) => [p.id, p]));
   for (const p of partners) if (p.affiliate_code && p.affiliate_code.trim()) map.set(codeKey(p.affiliate_code), p);
+  for (const a of affiliates) if (a.code && byId.has(a.partner_id)) map.set(codeKey(a.code), byId.get(a.partner_id));
   return map;
 }
 
+export const affiliateByCode = (affiliates = []) => new Map(affiliates.filter((a) => a.code).map((a) => [codeKey(a.code), a]));
+
 export const isPartnerSale = (s, byCode) => byCode.has(codeKey(s.affiliate_code));
 
-// Revenue grouped by affiliate code. Codes that don't belong to a CRM partner are listed
-// separately so nothing is silently lost; bookings without a code are "Direct".
-export function revenueByPartner(sales, partners, cur) {
-  const byCode = partnerByCode(partners);
+// Revenue per hotel (its own code + its people's codes). Codes that don't belong to anyone in
+// the CRM are listed separately so nothing is silently lost; no code = "Direct".
+export function revenueByPartner(sales, partners, cur, affiliates = []) {
+  const byCode = partnerByCode(partners, affiliates);
+  const people = affiliateByCode(affiliates);
   const rows = new Map();
   for (const s of activeSales(sales)) {
-    const key = codeKey(s.affiliate_code);
-    const row = rows.get(key) ?? { partner: byCode.get(key) ?? null, code: (s.affiliate_code ?? '').trim(), bookings: 0, revenue: 0 };
+    const code = codeKey(s.affiliate_code);
+    const partner = byCode.get(code) ?? null;
+    const affiliate = partner ? null : people.get(code) ?? null; // a person without a hotel
+    const key = partner ? `p:${partner.id}` : `c:${code}`;
+    const row = rows.get(key) ?? { partner, affiliate, code: partner ? partner.affiliate_code ?? '' : (s.affiliate_code ?? '').trim(), bookings: 0, revenue: 0 };
     row.bookings += 1;
     row.revenue += saleValue(s, cur);
     rows.set(key, row);
   }
   return [...rows.values()].sort((a, b) => b.revenue - a.revenue);
 }
+
+// Revenue per code, naming the hotel and/or the person behind it.
+export function revenueBySource(sales, partners, cur, affiliates = []) {
+  const byCode = partnerByCode(partners, affiliates);
+  const people = affiliateByCode(affiliates);
+  const rows = new Map();
+  for (const s of activeSales(sales)) {
+    const code = codeKey(s.affiliate_code);
+    const row = rows.get(code) ?? { partner: byCode.get(code) ?? null, affiliate: people.get(code) ?? null, code: (s.affiliate_code ?? '').trim(), bookings: 0, revenue: 0 };
+    row.bookings += 1;
+    row.revenue += saleValue(s, cur);
+    rows.set(code, row);
+  }
+  return [...rows.values()].sort((a, b) => b.revenue - a.revenue);
+}
+
+// ── Front-line affiliates & commission ─────────────────────────
+export const AFFILIATE_STATUSES = [
+  { value: 'offered', label: 'Offered', hint: 'Told about the program' },
+  { value: 'confirmed', label: 'Confirmed', hint: 'Said yes – print their card' },
+  { value: 'card_given', label: 'Card given', hint: 'Has the business card' },
+  { value: 'inactive', label: 'Inactive', hint: 'Left / stopped' },
+];
+export const affiliateStatusLabel = (s) => find(AFFILIATE_STATUSES, s)?.label ?? s;
+
+// Commission in EUR for one booking: a % of the booking value or a fixed amount.
+export function saleCommission(sale, aff) {
+  const v = Number(aff.commission_value) || 0;
+  return Math.round((aff.commission_type === 'fixed' ? v : (Number(sale.amount_eur) * v) / 100) * 100) / 100;
+}
+
+// A booking is only paid out once the rental has happened (not cancelled, return / pickup date passed).
+// Without rental dates in the export, the booking counts from its booking date.
+export const isCompleted = (sale, t = today()) => !sale.is_cancelled && (sale.return_date ?? sale.pickup_date ?? sale.booking_date) <= t;
+
+export function affiliateEarnings(aff, sales, payouts, t = today()) {
+  const mine = activeSales(sales).filter((s) => codeKey(s.affiliate_code) === codeKey(aff.code));
+  const done = mine.filter((s) => isCompleted(s, t));
+  const waiting = mine.filter((s) => !isCompleted(s, t));
+  const earned = done.reduce((sum, s) => sum + saleCommission(s, aff), 0);
+  const pending = waiting.reduce((sum, s) => sum + saleCommission(s, aff), 0);
+  const paid = payouts.filter((p) => p.affiliate_id === aff.id).reduce((sum, p) => sum + Number(p.amount_eur), 0);
+  return {
+    bookings: mine.length,
+    completed: done.length,
+    revenue_eur: mine.reduce((sum, s) => sum + Number(s.amount_eur), 0),
+    earned: Math.round(earned * 100) / 100,
+    pending: Math.round(pending * 100) / 100,
+    paid: Math.round(paid * 100) / 100,
+    owed: Math.round((earned - paid) * 100) / 100,
+  };
+}
+
+export const commissionLabel = (aff) => (aff.commission_type === 'fixed' ? `€${aff.commission_value} per booking` : `${aff.commission_value} % of booking`);
 
 // ── Goals ──────────────────────────────────────────────────────
 export const monthOf = (date) => date.slice(0, 7);
@@ -483,8 +546,8 @@ export function monthElapsed(month, t = today()) {
 // Activity timestamps are UTC ISO strings – compare months in local time.
 const localMonth = (ts) => today(new Date(ts)).slice(0, 7);
 
-export function actuals(month, { activities, partners, sales }) {
-  const byCode = partnerByCode(partners);
+export function actuals(month, { activities, partners, sales, affiliates = [] }) {
+  const byCode = partnerByCode(partners, affiliates);
   const partnerSales = activeSales(sales).filter((s) => monthOf(s.booking_date) === month && isPartnerSale(s, byCode));
   // First visit per partner – "hotels reached" that month.
   const firstVisit = new Map();

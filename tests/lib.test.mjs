@@ -4,6 +4,11 @@ import { describe, it } from 'node:test';
 import {
   actuals,
   agenda,
+  affiliateEarnings,
+  isCompleted,
+  revenueBySource,
+  saleCommission,
+  partnerByCode,
   daysLeft,
   reviewGrowth,
   reviewStats,
@@ -294,5 +299,38 @@ describe('categories, deadlines, posts', () => {
     assert.equal(reviewStats([{ rating: 5, published_at: '2026-10-01' }, { rating: 3, published_at: '2026-09-01' }], '2026-09-15').count, 1);
     assert.deepEqual(reviewGrowth([{ day: '2026-09-01', rating: 4.6, rating_count: 1000 }, { day: '2026-10-01', rating: 4.7, rating_count: 1040 }]).gained, 40);
     assert.equal(reviewGrowth([{ day: '2026-09-01', rating_count: 1 }]), null);
+  });
+});
+
+describe('front-line affiliates', () => {
+  const partners = [{ id: 'h1', name: 'Hotel Borg', affiliate_code: 'BORG' }];
+  const anna = { id: 'a1', partner_id: 'h1', name: 'Anna', code: 'ANNA-BORG', commission_type: 'percent', commission_value: 5 };
+  const solo = { id: 'a2', partner_id: null, name: 'Jón', code: 'JON', commission_type: 'fixed', commission_value: 20 };
+  const sales = [
+    { booking_ref: '1', booking_date: '2026-09-01', return_date: '2026-09-20', affiliate_code: 'anna-borg', amount_eur: 1000, amount_isk: 140000, is_cancelled: false },
+    { booking_ref: '2', booking_date: '2026-10-01', return_date: '2026-11-10', affiliate_code: 'ANNA-BORG', amount_eur: 600, amount_isk: 84000, is_cancelled: false },
+    { booking_ref: '3', booking_date: '2026-09-05', return_date: '2026-09-10', affiliate_code: 'ANNA-BORG', amount_eur: 900, amount_isk: 126000, is_cancelled: true },
+    { booking_ref: '4', booking_date: '2026-09-02', affiliate_code: 'BORG', amount_eur: 500, amount_isk: 70000, is_cancelled: false },
+    { booking_ref: '5', booking_date: '2026-09-03', pickup_date: '2026-09-30', affiliate_code: 'JON', amount_eur: 800, amount_isk: 112000, is_cancelled: false },
+  ];
+  it('pays only completed, not cancelled bookings', () => {
+    assert.equal(isCompleted(sales[0], '2026-10-07'), true);
+    assert.equal(isCompleted(sales[1], '2026-10-07'), false);
+    assert.equal(isCompleted(sales[2], '2026-10-07'), false);
+    assert.equal(saleCommission(sales[0], anna), 50);
+    assert.equal(saleCommission(sales[4], solo), 20);
+    const e = affiliateEarnings(anna, sales, [{ affiliate_id: 'a1', amount_eur: 30 }], '2026-10-07');
+    assert.deepEqual(e, { bookings: 2, completed: 1, revenue_eur: 1600, earned: 50, pending: 30, paid: 30, owed: 20 });
+  });
+  it('counts a person’s bookings for their hotel and keeps them visible per source', () => {
+    const byCode = partnerByCode(partners, [anna, solo]);
+    assert.equal(byCode.get('anna-borg').name, 'Hotel Borg');
+    assert.equal(byCode.has('jon'), false);
+    const byHotel = revenueByPartner(sales, partners, 'EUR', [anna, solo]);
+    assert.equal(byHotel[0].partner.name, 'Hotel Borg');
+    assert.equal(byHotel[0].revenue, 2100);
+    assert.equal(byHotel.find((r) => r.affiliate?.name === 'Jón').revenue, 800);
+    const bySource = revenueBySource(sales, partners, 'EUR', [anna, solo]);
+    assert.equal(bySource.find((r) => r.code === 'anna-borg' || r.code === 'ANNA-BORG').affiliate.name, 'Anna');
   });
 });

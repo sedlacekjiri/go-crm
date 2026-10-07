@@ -2,12 +2,14 @@
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
 import { AREAS, PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
+import { renderOverview } from './affiliates.js';
 import { esc, openModal, options, shortDate, toast } from '../util.js';
 
 // Filters survive navigating to a partner and back.
 const filters = { query: '', stage: '', area: '', sort: 'name' };
 
-export function render(page, { query, refresh }) {
+export function render(page, { query, refresh, isCurrent }) {
+  const isAffiliates = query.get('type') === 'affiliates';
   const type = PARTNER_TYPES.some((t) => t.value === query.get('type')) ? query.get('type') : 'hotel';
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
   const lastContact = new Map();
@@ -15,15 +17,22 @@ export function render(page, { query, refresh }) {
   const visits = visitStats(state.activities);
   const count = (pred) => state.partners.filter(pred).length;
 
+  const tabs = `<nav class="tabs">${PARTNER_TYPES.map(
+      (t) => `<a href="#/partners?type=${t.value}" class="${t.value === type && !isAffiliates ? 'active' : ''}">${t.label}<span class="count">${count((p) => p.type === t.value)}</span></a>`
+    ).join('')}<a href="#/partners?type=affiliates" class="${isAffiliates ? 'active' : ''}">Front-line affiliates<span class="count">${state.affiliates.length}</span></a></nav>`;
+
+  if (isAffiliates) {
+    page.innerHTML = `${pageHeader('Partners', 'Front-line people with their own booking code and commission')}${tabs}<div id="affOverview"></div>`;
+    return renderOverview(page.querySelector('#affOverview'), refresh, isCurrent);
+  }
+
   page.innerHTML = `
     ${pageHeader(
       'Partners',
       'Hotels, guesthouses, OTAs and cafés in the capital region',
       isAdmin() ? `<button class="btn secondary" data-bulk>Bulk add</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
     )}
-    <nav class="tabs">${PARTNER_TYPES.map(
-      (t) => `<a href="#/partners?type=${t.value}" class="${t.value === type ? 'active' : ''}">${t.label}<span class="count">${count((p) => p.type === t.value)}</span></a>`
-    ).join('')}</nav>
+    ${tabs}
     <div class="toolbar">
       <input class="input grow" type="search" placeholder="Search name, address, code…" value="${esc(filters.query)}" data-f="query" />
       <select class="input" data-f="area" aria-label="Area">${options(AREAS, filters.area, { empty: 'All areas' })}</select>

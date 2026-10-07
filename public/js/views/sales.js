@@ -1,7 +1,7 @@
 // Sales imported from Caren: revenue per day / week / month, per brand and per partner, EUR or ISK.
 import { revenueChart } from '../chart.js';
 import { emptyBox, kpi, onSeg, pageHeader, seg } from '../components.js';
-import { brandLabel, codeKey, isPartnerSale, parseNumber, partnerByCode, revenueByPartner, revenueSeries, saleValue, shiftDate, today, totals } from '../lib.js';
+import { affiliateByCode, brandLabel, codeKey, isPartnerSale, parseNumber, partnerByCode, revenueBySource, revenueSeries, saleValue, shiftDate, today, totals } from '../lib.js';
 import { currency, isAdmin, loadSales, state } from '../store.js';
 import { esc, money, num, options, pct, shortDate } from '../util.js';
 
@@ -106,7 +106,8 @@ export async function render(page, ctx) {
     return;
   }
 
-  const byCode = partnerByCode(state.partners);
+  const byCode = partnerByCode(state.partners, state.affiliates);
+  const people = affiliateByCode(state.affiliates);
   const sales = all.filter(
     (s) => (!v.brand || (v.brand === 'camper' ? s.brand === 'camper' : s.brand !== 'camper')) && (v.source === 'all' || (v.source === 'partners') === isPartnerSale(s, byCode))
   );
@@ -115,7 +116,7 @@ export async function render(page, ctx) {
     sales.filter((s) => isPartnerSale(s, byCode)),
     cur
   );
-  const bySource = revenueByPartner(sales, state.partners, cur);
+  const bySource = revenueBySource(sales, state.partners, cur, state.affiliates);
   const list = v.showAll ? sales : sales.slice(0, 30);
 
   body.innerHTML = `
@@ -132,7 +133,9 @@ export async function render(page, ctx) {
         <div class="list">${bySource
           .slice(0, 25)
           .map((r) => {
-            const label = r.partner
+            const label = r.affiliate
+              ? `<b>${esc(r.affiliate.name)}</b> <span class="muted small">${r.partner ? esc(r.partner.name) : 'front-line'}</span>`
+              : r.partner
               ? `<b>${esc(r.partner.name)}</b>`
               : r.code
                 ? `<span class="mono">${esc(r.code)}</span> <span class="muted small">no partner in CRM</span>`
@@ -159,7 +162,7 @@ export async function render(page, ctx) {
               <td class="nowrap">${shortDate(s.booking_date)}</td><td class="mono">${esc(s.booking_ref)}</td>
               <td class="opt nowrap">${esc(brandLabel(s.brand))}</td><td class="opt">${esc(s.vehicle ?? '–')}</td>
               <td class="opt nowrap">${shortDate(s.pickup_date)}${s.rental_days ? ` <span class="muted">· ${s.rental_days}d</span>` : ''}</td>
-              <td>${p ? esc(p.name) : s.affiliate_code ? esc(s.affiliate_code) : '<span class="muted">Direct</span>'}</td>
+              <td>${people.get(codeKey(s.affiliate_code)) ? `${esc(people.get(codeKey(s.affiliate_code)).name)}${p ? ` <span class="muted">· ${esc(p.name)}</span>` : ''}` : p ? esc(p.name) : s.affiliate_code ? esc(s.affiliate_code) : '<span class="muted">Direct</span>'}</td>
               <td class="r nowrap">${money(saleValue(s, cur), cur)}</td></tr>`;
           })
           .join('')}</tbody>

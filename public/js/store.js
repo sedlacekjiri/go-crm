@@ -50,6 +50,9 @@ export const state = {
   contacts: [],
   activities: [],
   tasks: [],
+  posts: [],
+  affiliates: [],
+  payouts: [],
   goals: [],
   salesInfo: null,
 };

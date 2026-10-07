@@ -44,6 +44,8 @@ export async function onRequestDelete({ request, env }) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM activities WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM tasks WHERE partner_id = ?').bind(id),
+    // Front-line people stay (with their payouts) but are no longer linked to the hotel.
+    env.DB.prepare('UPDATE affiliates SET partner_id = NULL WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM contacts WHERE partner_id = ?').bind(id),
     env.DB.prepare('DELETE FROM partners WHERE id = ?').bind(id),
   ]);

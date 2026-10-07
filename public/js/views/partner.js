@@ -2,6 +2,7 @@
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
 import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
+import { affiliateModal, affiliateRows, wireAffiliateRows } from './affiliates.js';
 import { planVisits } from './tasks.js';
 import { copyText, dateTime, esc, formData, fullDate, money, nowLocalInput, openModal, options, shortDate, toast } from '../util.js';
 
@@ -25,6 +26,7 @@ export async function render(page, { params, refresh, isCurrent }) {
   const admin = isAdmin();
   const cur = currency.value;
   const open = !['accepted', 'declined'].includes(p.stage);
+  const showAffiliate = ['in_talks', 'accepted'].includes(p.stage) || !!p.affiliate_code || state.affiliates.some((a) => a.partner_id === p.id);
 
   page.innerHTML = `
     <a class="back" href="#/partners?type=${p.type}">← ${esc(typeLabel(p.type))}s</a>
@@ -59,7 +61,7 @@ export async function render(page, { params, refresh, isCurrent }) {
           </section>`
             : ''
         }
-        ${p.stage === 'accepted' || p.affiliate_code ? '<section class="card" id="perf"><div class="card-head"><h2>Affiliate results</h2></div><p class="empty">Loading…</p></section>' : ''}
+        ${showAffiliate ? '<section class="card" id="perf"><div class="card-head"><h2>Affiliate</h2></div><p class="empty">Loading…</p></section>' : ''}
         <section class="card">
           <div class="card-head"><h2>Activity <span class="muted">(${activities.length})</span></h2></div>
           ${
@@ -149,7 +151,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     }
   };
 
-  if (p.stage === 'accepted' || p.affiliate_code) await renderPerformance(page, p, cur, isCurrent);
+  if (showAffiliate) await renderPerformance(page, p, cur, isCurrent, refresh);
 }
 
 async function remove(path, done) {
@@ -162,49 +164,61 @@ async function remove(path, done) {
   }
 }
 
-async function renderPerformance(page, p, cur, isCurrent) {
+async function renderPerformance(page, p, cur, isCurrent, refresh) {
   const el = page.querySelector('#perf');
-  if (!p.affiliate_code) {
-    el.innerHTML = `<div class="card-head"><h2>Affiliate results</h2></div>
-      <p class="muted">Add the partner’s affiliate code (Edit) so bookings from the Caren import are matched to them.</p>`;
-    return;
-  }
-  // All bookings since a year before they became a partner.
+  const people = state.affiliates.filter((a) => a.partner_id === p.id);
+  const codes = new Set([p.affiliate_code, ...people.map((a) => a.code)].filter(Boolean).map(codeKey));
+  // All bookings since a year before they became a partner (and anything booked ahead).
   const from = shiftDate(p.accepted_at || p.created_at.slice(0, 10), -365);
-  const sales = (await loadSales(from, today())).filter((s) => codeKey(s.affiliate_code) === codeKey(p.affiliate_code));
+  const allSales = await loadSales(from, shiftDate(today(), 400));
   if (!isCurrent()) return;
+  const sales = allSales.filter((s) => codes.has(codeKey(s.affiliate_code)));
   const all = totals(sales, cur);
   const last30 = totals(
-    sales.filter((s) => s.booking_date >= shiftDate(today(), -29)),
+    sales.filter((s) => s.booking_date >= shiftDate(today(), -29) && s.booking_date <= today()),
     cur
   );
   const first = sales.filter((s) => !s.is_cancelled).at(-1)?.booking_date;
+  const via = (s) => people.find((a) => codeKey(a.code) === codeKey(s.affiliate_code))?.name ?? 'Hotel code';
   el.innerHTML = `
-    <div class="card-head"><h2>Affiliate results</h2><span class="sub">code <span class="code">${esc(p.affiliate_code)}</span></span></div>
+    <div class="card-head"><h2>Affiliate</h2>${p.affiliate_code ? `<span class="sub">hotel code <span class="code">${esc(p.affiliate_code)}</span></span>` : ''}</div>
     ${
       p.affiliate_url
         ? `<div class="line" style="margin:0 0 14px"><span class="mono muted" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.affiliate_url)}</span><button class="btn secondary sm" data-copy>Copy link</button></div>`
-        : ''
+        : !p.affiliate_code
+          ? '<p class="muted" style="margin-bottom:12px">No hotel code yet (Edit). Front-line people below can still have their own codes.</p>'
+          : ''
     }
     <div class="mini-kpis">
-      ${miniKpi('Bookings', all.bookings, 'total')}
+      ${miniKpi('Bookings', all.bookings, people.length ? 'hotel + people' : 'total')}
       ${miniKpi('Revenue', money(all.revenue, cur), 'total')}
       ${miniKpi('Last 30 days', money(last30.revenue, cur), `${last30.bookings} bookings`)}
       ${miniKpi('First booking', first ? shortDate(first) : '–')}
     </div>
+
+    <div class="card-head" style="margin-top:18px"><h2>Front-line affiliates <span class="muted">(${people.length})</span></h2>
+      ${isAdmin() ? '<button class="link-btn" data-add-aff>+ Add person</button>' : ''}</div>
+    ${
+      people.length
+        ? `<ul class="aff-list">${affiliateRows(people, allSales)}</ul>`
+        : '<p class="muted small">Receptionists or concierges who recommend you get their own code and a commission for every completed booking. Add them here once they’re interested.</p>'
+    }
+
     ${
       sales.length
-        ? `<div class="table-wrap" style="margin-top:12px"><table class="num"><thead><tr><th>Booked</th><th>Ref</th><th class="opt">Brand</th><th class="r">Amount</th></tr></thead><tbody>
+        ? `<h3 class="sec" style="margin-top:18px">Latest bookings</h3><div class="table-wrap"><table class="num"><thead><tr><th>Booked</th><th>Ref</th><th>Via</th><th class="opt">Brand</th><th class="r">Amount</th></tr></thead><tbody>
           ${sales
             .slice(0, 10)
             .map(
               (s) => `<tr class="${s.is_cancelled ? 'cancelled' : ''}"><td class="nowrap">${shortDate(s.booking_date)}</td><td class="mono">${esc(s.booking_ref)}</td>
-                <td class="opt">${esc(brandLabel(s.brand))}</td><td class="r nowrap">${money(saleValue(s, cur), cur)}</td></tr>`
+                <td>${esc(via(s))}</td><td class="opt">${esc(brandLabel(s.brand))}</td><td class="r nowrap">${money(saleValue(s, cur), cur)}</td></tr>`
             )
             .join('')}</tbody></table></div>`
-        : '<p class="empty">No bookings with this code yet.</p>'
+        : '<p class="empty">No bookings with these codes yet.</p>'
     }`;
   el.querySelector('[data-copy]')?.addEventListener('click', () => copyText(p.affiliate_url));
+  el.querySelector('[data-add-aff]')?.addEventListener('click', () => affiliateModal({ partner_id: p.id }, p, refresh));
+  wireAffiliateRows(el, allSales, refresh);
 }
 
 export function logActivity(p, contacts, refresh) {

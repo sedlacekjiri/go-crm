@@ -1,6 +1,6 @@
 // Import a Caren booking export (CSV / Excel): map columns, preview, convert to EUR/ISK, upload.
 import { emptyBox, miniKpi, pageHeader } from '../components.js';
-import { buildSales, codeKey, convert, guessMapping, IMPORT_FIELDS, partnerByCode } from '../lib.js';
+import { affiliateByCode, buildSales, codeKey, convert, guessMapping, IMPORT_FIELDS, partnerByCode } from '../lib.js';
 import { api, clearSalesCache, fetchDailyRates, isAdmin, loadData, state } from '../store.js';
 import { esc, money, options, shortDate, storage, toast } from '../util.js';
 
@@ -121,12 +121,13 @@ function previewCard(parsed, missing) {
       <div class="banner error-banner">Choose a column for: ${missing.map((f) => esc(f.label)).join(', ')}</div></section>`;
   }
   const { sales, errors } = parsed;
-  const byCode = partnerByCode(state.partners);
+  const byCode = partnerByCode(state.partners, state.affiliates);
+  const people = affiliateByCode(state.affiliates);
   const codes = new Map();
   for (const s of sales) {
     if (!s.affiliate_code) continue;
     const k = codeKey(s.affiliate_code);
-    const c = codes.get(k) ?? { code: s.affiliate_code, n: 0, matched: byCode.has(k) };
+    const c = codes.get(k) ?? { code: s.affiliate_code, n: 0, matched: byCode.has(k) || people.has(k) };
     c.n++;
     codes.set(k, c);
   }
@@ -143,7 +144,7 @@ function previewCard(parsed, missing) {
     </div>
     ${
       codes.size
-        ? `<p class="small" style="margin:14px 0 6px;color:var(--text-2)">Affiliate codes in the file (✓ = matches a partner)</p>
+        ? `<p class="small" style="margin:14px 0 6px;color:var(--text-2)">Affiliate codes in the file (✓ = matches a hotel or front-line person)</p>
            <div class="code-chips">${[...codes.values()]
              .sort((a, b) => b.n - a.n)
              .slice(0, 40)

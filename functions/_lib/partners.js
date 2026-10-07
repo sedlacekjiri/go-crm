@@ -1,6 +1,6 @@
 // Partner validation + save, shared by /api/partners and /api/activities.
 
-import { int, isDate, now, oneOf, str, uuid } from './db.js';
+import { codeOwner, int, isDate, now, oneOf, str, uuid } from './db.js';
 
 export const TYPES = ['hotel', 'guesthouse', 'ota', 'cafe', 'other'];
 const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined'];
@@ -38,11 +38,8 @@ export async function savePartner(db, body, { visitLogged = false } = {}) {
   row.updated_at = now();
 
   if (row.affiliate_code) {
-    const clash = await db
-      .prepare('SELECT name FROM partners WHERE lower(affiliate_code) = lower(?) AND id != ?')
-      .bind(row.affiliate_code, row.id)
-      .first();
-    if (clash) return { error: `Affiliate code "${row.affiliate_code}" is already used by ${clash.name}.`, status: 409 };
+    const owner = await codeOwner(db, row.affiliate_code, { partnerId: row.id });
+    if (owner) return { error: `Affiliate code "${row.affiliate_code}" is already used by ${owner}.`, status: 409 };
   }
 
   const cols = Object.keys(row);
