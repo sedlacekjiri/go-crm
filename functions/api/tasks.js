@@ -4,6 +4,7 @@
 //        makes it a multi-day task shown as "in progress" from that day.
 //        subtasks: [{ id?, title, done }] – a checklist inside the task (replaces the whole list).
 //   POST { plan: { date: "YYYY-MM-DD", partner_ids: [...] } }              plan visits for a day
+//   GET  ?done=1&from=YYYY-MM-DD               finished tasks, newest first (history; everyone logged in)
 //   DELETE ?id=…
 
 import { authorize, bad, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
@@ -11,6 +12,21 @@ import { authorize, bad, isDate, json, now, oneOf, parseSubtasks, readJson, str,
 const TYPES = ['todo', 'visit'];
 const CATEGORIES = ['sales', 'marketing'];
 const isTime = (v) => typeof v === 'string' && /^\d{2}:\d{2}$/.test(v);
+
+export async function onRequestGet({ request, env }) {
+  const auth = await authorize(request, env);
+  if (auth instanceof Response) return auth;
+  const url = new URL(request.url);
+  if (url.searchParams.get('done') !== '1') return bad('Use ?done=1');
+  const from = url.searchParams.get('from');
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM tasks WHERE done = 1 AND (? IS NULL OR substr(COALESCE(done_at, due_date), 1, 10) >= ?)
+     ORDER BY COALESCE(done_at, due_date) DESC LIMIT 2000`
+  )
+    .bind(isDate(from) ? from : null, isDate(from) ? from : null)
+    .all();
+  return json(results.map((t) => ({ ...t, done: true, subtasks: parseSubtasks(t.subtasks) })));
+}
 
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true });

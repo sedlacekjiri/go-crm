@@ -342,3 +342,18 @@ describe('subtasks', () => {
     assert.deepEqual(subtaskProgress({}), { done: 0, total: 0 });
   });
 });
+
+describe('done history', () => {
+  it('groups by the day it was ticked off and measures lateness', async () => {
+    const { groupDone } = await import('../public/js/lib.js');
+    const g = groupDone([
+      { id: 1, due_date: '2026-10-05', done_at: '2026-10-07T10:00:00.000Z' },
+      { id: 2, due_date: '2026-10-07', done_at: '2026-10-07T09:00:00.000Z' },
+      { id: 3, due_date: '2026-10-08', done_at: '2026-10-06T09:00:00.000Z' },
+      { id: 4, due_date: '2026-10-01', done_at: null },
+    ]);
+    assert.deepEqual(g.map((x) => x.day), ['2026-10-07', '2026-10-06', '2026-10-01']);
+    assert.deepEqual(g[0].items.map((x) => x.lateBy), [2, 0]);
+    assert.equal(g[1].items[0].lateBy, 0); // done early
+  });
+});

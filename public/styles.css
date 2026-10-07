@@ -834,3 +834,4 @@ button.row:hover { background: var(--surface-2); }
   .sticky.compact { flex-basis: 180px; }
   .sticky-acts button { opacity: 1; }
 }
+.done-day { margin-top: 12px; } .done-day .task .title { color: var(--text); text-decoration: none; }

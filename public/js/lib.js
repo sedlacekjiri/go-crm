@@ -605,6 +605,19 @@ export function agenda(date, { tasks, partners, posts = [] }, category = '') {
   return { visits, todos, ongoing, followUps, posts: dayPosts };
 }
 
+// Finished tasks grouped by the (local) day they were ticked off, newest first.
+// Each item gets `doneDay` and `lateBy` (days after the deadline it was done; 0 = on time).
+export function groupDone(tasks) {
+  const groups = new Map();
+  for (const t of tasks) {
+    const doneDay = t.done_at ? today(new Date(t.done_at)) : t.due_date;
+    const item = { ...t, doneDay, lateBy: Math.max(0, daysBetween(t.due_date, doneDay)) };
+    if (!groups.has(doneDay)) groups.set(doneDay, []);
+    groups.get(doneDay).push(item);
+  }
+  return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([day, items]) => ({ day, items }));
+}
+
 // Checklist progress inside a task.
 export function subtaskProgress(task) {
   const list = task.subtasks ?? [];
