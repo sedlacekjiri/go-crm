@@ -2,6 +2,7 @@
 import { channelTags, kpi, onSeg, pageHeader, seg } from '../components.js';
 import {
   CHANNELS,
+  CHECKLIST_TEMPLATES,
   FORMATS,
   monthGrid,
   monthOf,
@@ -20,6 +21,7 @@ import {
 import { api, isAdmin, state } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
 import { taskModal } from './tasks.js';
+import { editorHtml, inlineChecklist, mountEditor, progressPill, toggleInList } from '../checklist.js';
 
 // "3 days left" / "today" / "2 days late" pill for a deadline.
 export const deadlinePill = (daysLeft, prefix = '') => {
@@ -73,7 +75,7 @@ export async function render(page, ctx) {
     else if (b.dataset.dlTask) taskModal(state.tasks.find((x) => x.id === b.dataset.dlTask), ctx.refresh);
     else if ('dlNew' in b.dataset) taskModal({ type: 'todo', category: 'marketing', start_date: today(), due_date: shiftDate(today(), 7) }, ctx.refresh);
   });
-  page.querySelector('[data-new-post]')?.addEventListener('click', () => postModal({ status: 'scheduled', publish_date: v.selected, channels: ['instagram'] }, ctx.refresh));
+  page.querySelector('[data-new-post]')?.addEventListener('click', () => postModal({ status: 'in_progress', publish_date: v.selected, channels: ['instagram'] }, ctx.refresh));
   page.querySelector('[data-new-idea]')?.addEventListener('click', () => postModal({ status: 'idea', channels: [] }, ctx.refresh));
 
   const body = page.querySelector('#mBody');
@@ -205,13 +207,20 @@ function renderContent(el, ctx) {
     const b = e.target.closest('button, .mday');
     if (!b) return;
     const d = b.dataset;
+    if (d.clToggle) {
+      const post = state.posts.find((x) => x.id === d.clToggle);
+      post.subtasks = toggleInList(post.subtasks, d.sub); // instant feedback
+      renderContent(el, ctx);
+      api('/api/posts', { method: 'POST', body: { id: post.id, subtasks: post.subtasks } }).catch((err) => toast(err.message, 'error'));
+      return;
+    }
     if (d.post) {
       e.stopPropagation();
       postModal(state.posts.find((p) => p.id === d.post), ctx.refresh);
     } else if (d.dlTask) {
       e.stopPropagation();
       taskModal(state.tasks.find((x) => x.id === d.dlTask), ctx.refresh);
-    } else if (d.add) postModal({ status: 'scheduled', publish_date: d.add, channels: ['instagram'] }, ctx.refresh);
+    } else if (d.add) postModal({ status: 'in_progress', publish_date: d.add, channels: ['instagram'] }, ctx.refresh);
     else if (d.shift) {
       v.selected = v.mode === 'week' ? shiftDate(v.selected, 7 * Number(d.shift)) : `${shiftMonth(monthOf(v.selected), Number(d.shift))}-01`;
       rerender();
@@ -230,10 +239,11 @@ function renderContent(el, ctx) {
 
 function postCard(p) {
   return `<article class="post-card" data-post="${p.id}">
-    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}</div>
+    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}${progressPill(p)}</div>
     <h4>${esc(p.title)}</h4>
     <div class="muted small">${[brandName(p.brand), fmtName(p.format), p.theme].filter(Boolean).map(esc).join(' · ')}</div>
     ${p.caption ? `<p class="caption">${esc(p.caption.length > 180 ? `${p.caption.slice(0, 180)}…` : p.caption)}</p>` : ''}
+    ${inlineChecklist(p, isAdmin())}
     <div class="pc-links">${p.media_url ? `<a href="${esc(p.media_url)}" target="_blank" rel="noreferrer">Media ↗</a>` : ''}${p.post_url ? `<a href="${esc(p.post_url)}" target="_blank" rel="noreferrer">Live post ↗</a>` : ''}
       <button type="button" class="link-btn" data-post="${p.id}">Open</button></div>
   </article>`;
@@ -267,7 +277,7 @@ function renderIdeas(el, ctx) {
                 ${p.theme ? `<span class="theme">${esc(p.theme)}</span>` : ''}
                 <h4>${esc(p.title)}</h4>
                 ${p.caption ? `<p>${esc(p.caption.length > 140 ? `${p.caption.slice(0, 140)}…` : p.caption)}</p>` : ''}
-                ${readyByPill(p)}
+                ${readyByPill(p)}${progressPill(p)}
                 <div class="idea-foot">${channelTags(p.channels)}<span class="muted small">${esc(brandName(p.brand))}</span>
                   ${admin ? `<span class="idea-acts"><button class="btn sm" data-schedule="${p.id}">Schedule</button><button class="icon-btn round sm" data-post="${p.id}" aria-label="Edit">✎</button></span>` : ''}</div>
               </article>`
@@ -329,6 +339,7 @@ export function postModal(post, refresh) {
         <label class="field"><span>Theme</span><select class="input" name="theme">${options(THEMES, post.theme, { empty: '–' })}</select></label>
       </div>
       <label class="field"><span>Caption <em class="muted" data-count></em></span><textarea class="input" name="caption" rows="5" placeholder="Hook in the first line… #iceland #roadtrip">${esc(post.caption ?? '')}</textarea></label>
+      ${editorHtml('+ Add checklist for this format')}
       <div class="form-grid">
         <label class="field"><span>Photos / video (link)</span><input class="input" name="media_url" value="${esc(post.media_url ?? '')}" placeholder="Google Drive / Dropbox link" /></label>
         <label class="field"><span>Live post (link)</span><input class="input" name="post_url" value="${esc(post.post_url ?? '')}" placeholder="After publishing" /></label>
@@ -339,6 +350,8 @@ export function postModal(post, refresh) {
     </form>`
   );
   const form = m.el.querySelector('form');
+  // Checklist: steps to produce the content (template depends on the chosen format).
+  const getChecklist = mountEditor(m.el, post.subtasks, () => CHECKLIST_TEMPLATES[form.format.value] ?? CHECKLIST_TEMPLATES.reel);
   let status = post.status ?? 'idea';
   m.el.querySelector('[data-dl-quick]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-n]');
@@ -376,7 +389,7 @@ export function postModal(post, refresh) {
     try {
       await api('/api/posts', {
         method: 'POST',
-        body: { ...f, id: post.id, status, channels: [...chosen], brand: f.brand || null, format: f.format || null, theme: f.theme || null },
+        body: { ...f, id: post.id, status, channels: [...chosen], brand: f.brand || null, format: f.format || null, theme: f.theme || null, subtasks: getChecklist() },
       });
       m.close();
       toast(post.id ? 'Saved' : status === 'idea' ? 'Idea saved' : 'Post planned');
@@ -679,7 +692,7 @@ function deadlinesCard() {
             .map(
               (x) => `<li><button type="button" class="dl-row" ${x.kind === 'post' ? `data-dl-post="${x.id}"` : `data-dl-task="${x.id}"`}>
                 <span class="dl-kind">${x.kind === 'post' ? 'Post' : 'Task'}</span>
-                <span class="dl-title">${esc(x.title)}${x.kind === 'post' && x.ref.publish_date ? ` <span class="muted small">· goes live ${esc(shortDate(x.ref.publish_date))}</span>` : ''}${x.kind === 'task' && x.ref.subtasks?.length ? ` <span class="muted small">· ☑ ${x.ref.subtasks.filter((s) => s.done).length}/${x.ref.subtasks.length}</span>` : ''}</span>
+                <span class="dl-title">${esc(x.title)}${x.kind === 'post' && x.ref.publish_date ? ` <span class="muted small">· goes live ${esc(shortDate(x.ref.publish_date))}</span>` : ''}${x.ref.subtasks?.length ? ` <span class="muted small">· ☑ ${x.ref.subtasks.filter((s) => s.done).length}/${x.ref.subtasks.length}</span>` : ''}</span>
                 <span class="muted small nowrap">${esc(shortDate(x.date))}</span>${deadlinePill(x.daysLeft)}
               </button></li>`
             )

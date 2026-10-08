@@ -132,6 +132,14 @@ export const THEMES = [
   'Offer / promo',
 ];
 
+// Ready-made checklists for content, by format.
+export const CHECKLIST_TEMPLATES = {
+  reel: ['Script & hook', 'Shot list', 'Film', 'Voiceover', 'Edit + music', 'Subtitles', 'Cover image', 'Caption & hashtags', 'Schedule'],
+  carousel: ['Topic & points', 'Photos', 'Design slides', 'Caption & hashtags', 'Schedule'],
+  post: ['Photo', 'Edit', 'Caption & hashtags', 'Schedule'],
+  story: ['Content', 'Stickers / link', 'Post'],
+};
+
 export const channelLabel = (c) => find(CHANNELS, c)?.label ?? c;
 export const postStatusLabel = (s) => find(POST_STATUSES, s)?.label ?? s;
 

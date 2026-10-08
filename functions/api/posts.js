@@ -1,9 +1,9 @@
 // /api/posts (admin only) — marketing content: ideas and planned / published posts.
 //   POST   { id?, title, brand, channels: [...], format, theme, status, publish_date, publish_time, deadline,
-//            caption, media_url, post_url, notes }   create, or update only the fields sent
+//            caption, media_url, post_url, notes, subtasks: [{ title, done }] }   create, or update only the fields sent
 //   DELETE ?id=…
 
-import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const CHANNELS = ['facebook', 'instagram', 'tiktok', 'google', 'youtube'];
 const FORMATS = ['reel', 'post', 'carousel', 'story'];
@@ -37,6 +37,11 @@ export async function onRequestPost({ request, env }) {
   if (b.id && !existing) return bad('Post not found', 404);
   const row = existing ? { ...existing } : { id: uuid(), status: 'idea', created_at: now() };
   for (const [key, clean] of Object.entries(FIELDS)) if (key in b) row[key] = clean(b[key]);
+  if ('subtasks' in b) {
+    const list = cleanSubtasks(b.subtasks);
+    if (list === undefined) return bad('Invalid subtasks');
+    row.subtasks = list;
+  }
   if (!row.title) return bad('Give it a short title');
   if (row.status !== 'idea' && !row.publish_date) return bad('Choose a publish date (or keep it as an idea)');
   row.updated_at = now();
@@ -49,7 +54,7 @@ export async function onRequestPost({ request, env }) {
     )
     .bind(...cols.map((c) => row[c] ?? null))
     .run();
-  return json({ ...row, channels: row.channels ? row.channels.split(',') : [] });
+  return json({ ...row, channels: row.channels ? row.channels.split(',') : [], subtasks: parseSubtasks(row.subtasks) });
 }
 
 export async function onRequestDelete({ request, env }) {

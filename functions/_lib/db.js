@@ -224,6 +224,7 @@ const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN start_date TEXT`,
   `ALTER TABLE tasks ADD COLUMN subtasks TEXT`, // JSON: [{ id, title, done }]
   `ALTER TABLE posts ADD COLUMN deadline TEXT`, // content ready by
+  `ALTER TABLE posts ADD COLUMN subtasks TEXT`, // JSON checklist, like tasks.subtasks
   // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
   `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
   `ALTER TABLE reviews ADD COLUMN location TEXT`,
@@ -271,7 +272,17 @@ export const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
 export const now = () => new Date().toISOString();
 export const uuid = () => crypto.randomUUID();
 
-// tasks.subtasks is stored as JSON text.
+// Checklist (tasks.subtasks / posts.subtasks): [{ id?, title, done }] → cleaned JSON text or null.
+export function cleanSubtasks(list) {
+  if (!Array.isArray(list)) return undefined;
+  const out = list
+    .map((s) => ({ id: str(s?.id, 64) || uuid(), title: str(s?.title, 200), done: !!s?.done }))
+    .filter((s) => s.title)
+    .slice(0, 50);
+  return out.length ? JSON.stringify(out) : null;
+}
+
+// tasks.subtasks / posts.subtasks are stored as JSON text.
 export function parseSubtasks(v) {
   try {
     const list = v ? JSON.parse(v) : [];

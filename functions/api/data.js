@@ -27,7 +27,7 @@ export async function onRequestGet({ request, env }) {
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
     activities: activities.results,
     tasks: tasks.results.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
-    posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [] })),
+    posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [], subtasks: parseSubtasks(p.subtasks) })),
     affiliates: affiliates.results,
     payouts: payouts.results,
     notes: notes.results.map((n) => ({ ...n, pinned: !!n.pinned })),

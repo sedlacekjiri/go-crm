@@ -869,3 +869,10 @@ button.row:hover { background: var(--surface-2); }
 .reply-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .reply-form[hidden] { display: none; }
 [hidden] { display: none !important; }
+.sub-toggle.static { cursor: default; padding: 1px 8px; font-size: 11px; }
+.cl-inline { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.cl-inline li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cl-inline li.done span:last-child { color: var(--text-3); text-decoration: line-through; }
+.cl-inline .tick, .post-card .tick { width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; padding: 0; }
+.cl-inline .tick.on { background: var(--good); border-color: var(--good); }
+.modal .field > .link-btn { margin-top: 2px; }

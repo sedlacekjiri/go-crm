@@ -7,7 +7,7 @@
 //   GET  ?done=1&from=YYYY-MM-DD               finished tasks, newest first (history; everyone logged in)
 //   DELETE ?id=…
 
-import { authorize, bad, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const TYPES = ['todo', 'visit'];
 const CATEGORIES = ['sales', 'marketing'];
@@ -69,12 +69,9 @@ export async function onRequestPost({ request, env }) {
   if ('due_time' in b) row.due_time = isTime(b.due_time) ? b.due_time : null;
   if ('notes' in b) row.notes = str(b.notes, 2000);
   if ('subtasks' in b) {
-    if (!Array.isArray(b.subtasks)) return bad('Invalid subtasks');
-    const list = b.subtasks
-      .map((s) => ({ id: str(s?.id, 64) || uuid(), title: str(s?.title, 200), done: !!s?.done }))
-      .filter((s) => s.title)
-      .slice(0, 50);
-    row.subtasks = list.length ? JSON.stringify(list) : null;
+    const list = cleanSubtasks(b.subtasks);
+    if (list === undefined) return bad('Invalid subtasks');
+    row.subtasks = list;
   }
   if ('done' in b) {
     row.done = b.done ? 1 : 0;
