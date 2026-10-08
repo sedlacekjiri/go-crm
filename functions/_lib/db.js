@@ -189,6 +189,26 @@ const SCHEMA = [
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS google_auth (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    refresh_token TEXT NOT NULL,
+    connected_at TEXT NOT NULL,
+    last_sync TEXT,
+    error TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS gbp_locations (
+    name TEXT PRIMARY KEY,
+    account TEXT NOT NULL,
+    title TEXT,
+    address TEXT,
+    place_id TEXT,
+    label TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    synced_at TEXT,
+    total INTEGER,
+    average REAL
+  )`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
@@ -204,6 +224,12 @@ const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN start_date TEXT`,
   `ALTER TABLE tasks ADD COLUMN subtasks TEXT`, // JSON: [{ id, title, done }]
   `ALTER TABLE posts ADD COLUMN deadline TEXT`, // content ready by
+  // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
+  `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
+  `ALTER TABLE reviews ADD COLUMN location TEXT`,
+  `ALTER TABLE reviews ADD COLUMN updated_at TEXT`,
+  `ALTER TABLE reviews ADD COLUMN reply_text TEXT`,
+  `ALTER TABLE reviews ADD COLUMN reply_at TEXT`,
 ];
 
 let schemaReady = false;

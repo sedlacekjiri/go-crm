@@ -77,6 +77,13 @@ export async function render(page, ctx) {
   page.querySelector('[data-new-idea]')?.addEventListener('click', () => postModal({ status: 'idea', channels: [] }, ctx.refresh));
 
   const body = page.querySelector('#mBody');
+  // Coming back from the Google sign-in.
+  if (ctx.query.get('google')) {
+    if (ctx.query.get('google') === 'connected') toast('Google account connected ✓');
+    else toast(ctx.query.get('msg') || 'Google sign-in failed', 'error');
+    history.replaceState(null, '', '#/marketing?tab=reviews');
+    reviewsCache = null;
+  }
   if (tab === 'content') renderContent(body, ctx);
   else if (tab === 'ideas') renderIdeas(body, ctx);
   else await renderReviews(body, ctx);
@@ -86,9 +93,11 @@ export async function render(page, ctx) {
     .then((r) => {
       const el = page.querySelector('#ratingKpi');
       if (!el || !ctx.isCurrent()) return;
-      const main = r.places.find((p) => p.rating) ?? null;
+      // Prefer the Business Profile numbers (exact), else the Places API ones.
+      const loc = (r.google?.locations ?? []).filter((l) => l.active && l.total != null).sort((a, b) => b.total - a.total)[0];
+      const main = loc ? { rating: Number(loc.average), rating_count: loc.total, name: loc.title } : r.places.find((p) => p.rating) ?? null;
       el.querySelector('.value').innerHTML = main ? `<span class="star">★</span> ${main.rating.toFixed(1)}` : '–';
-      el.querySelector('.delta').textContent = main ? `${num(main.rating_count)} reviews · ${main.name}` : r.configured ? 'add your business under Google reviews' : 'not connected yet';
+      el.querySelector('.delta').textContent = main ? `${num(main.rating_count)} reviews · ${main.name}` : r.configured || r.google?.configured ? 'add your business under Google reviews' : 'not connected yet';
     })
     .catch(() => {});
 }
@@ -403,9 +412,10 @@ async function renderReviews(el, ctx) {
   if (!ctx.isCurrent()) return;
   const admin = isAdmin();
 
-  if (!r.configured) {
-    el.innerHTML = `<section class="card setup">
-      <div class="card-head"><h2>Connect Google reviews</h2></div>
+  const placesSetup = r.configured
+    ? ''
+    : `<section class="card setup">
+      <div class="card-head"><h2>Rating &amp; trend (Places API)</h2></div>
       <p class="steps">The CRM reads your Google rating and reviews through Google’s official Places API. It’s free at this volume
       (1,000 requests a month are free; the CRM uses about 60).</p>
       <ol class="steps">
@@ -416,22 +426,32 @@ async function renderReviews(el, ctx) {
         <li><i>Deployments</i> → Retry deployment (or ask Claude to redeploy), then come back here.</li>
       </ol>
     </section>`;
-    return;
-  }
 
-  if (!r.places.length) {
-    el.innerHTML = admin ? searchCard() : '<div class="empty-box"><b>No business connected yet</b></div>';
+  const g = r.google ?? { configured: false, connected: false, locations: [] };
+  // With the Business Profile connected, its complete reviews replace the Places API sample for the same place.
+  const gbpPlaces = new Set(r.reviews.filter((x) => x.source === 'gbp').map((x) => x.place_id));
+  const reviews = r.reviews.filter((x) => x.source === 'gbp' || !gbpPlaces.has(x.place_id)).sort((a, b) => (b.published_at ?? '').localeCompare(a.published_at ?? ''));
+  const needsReply = reviews.filter((x) => x.source === 'gbp' && !x.reply_text).length;
+
+  if (!r.places.length && !reviews.length) {
+    el.innerHTML = `${googleCard(g, admin)}${placesSetup || (admin ? searchCard() : '<div class="empty-box"><b>No business connected yet</b></div>')}`;
     wireSearch(el, ctx);
+    wireGoogle(el, ctx);
     return;
   }
 
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString();
-  const stats = reviewStats(r.reviews);
-  const recentStats = reviewStats(r.reviews, since30);
-  const shown = r.reviews.filter((x) => (!v.stars || (v.stars === 'low' ? x.rating <= 2 : x.rating === Number(v.stars))));
-  const placeName = new Map(r.places.map((p) => [p.place_id, p.name]));
+  const stats = reviewStats(reviews);
+  const recentStats = reviewStats(reviews, since30);
+  const shown = reviews.filter((x) =>
+    !v.stars ? true : v.stars === 'noreply' ? x.source === 'gbp' && !x.reply_text : v.stars === 'low' ? x.rating <= 2 : x.rating === Number(v.stars)
+  );
+  const placeName = new Map([...g.locations.map((l) => [l.place_id ?? l.name, l.title]), ...r.places.map((p) => [p.place_id, p.name])]);
+  const multiPlace = new Set(reviews.map((x) => x.place_id)).size > 1;
 
   el.innerHTML = `
+    ${googleCard(g, admin)}
+    ${placesSetup}
     <div class="place-grid">${r.places
       .map((p) => {
         const snaps = r.snapshots.filter((s) => s.place_id === p.place_id);
@@ -458,7 +478,7 @@ async function renderReviews(el, ctx) {
 
     <div class="grid grid-side">
       <section class="card">
-        <div class="card-head"><h2>Collected reviews <span class="muted">(${r.reviews.length})</span></h2>
+        <div class="card-head"><h2>${g.connected && gbpPlaces.size ? 'Reviews · newest first' : 'Collected reviews'} <span class="muted">(${reviews.length})</span></h2>
           ${admin ? '<button class="link-btn" data-refresh>Refresh now</button>' : ''}</div>
         <div class="chips" style="margin-bottom:12px">${[
           { value: '', label: 'All' },
@@ -466,6 +486,7 @@ async function renderReviews(el, ctx) {
           { value: '4', label: '★★★★' },
           { value: '3', label: '★★★' },
           { value: 'low', label: '★–★★' },
+          ...(gbpPlaces.size ? [{ value: 'noreply', label: `Needs reply${needsReply ? ` · ${needsReply}` : ''}` }] : []),
         ]
           .map((x) => `<button type="button" data-stars="${x.value}" aria-pressed="${v.stars === x.value}">${x.label}</button>`)
           .join('')}</div>
@@ -473,13 +494,13 @@ async function renderReviews(el, ctx) {
           shown.length
             ? `<div class="review-list">${shown
                 .map(
-                  (x) => `<article class="review ${x.rating <= 2 ? 'low' : ''}">
+                  (x) => `<article class="review ${x.rating <= 2 ? 'low' : ''}" data-review="${esc(x.id)}">
                   <div class="rv-top">
                     ${x.author_photo ? `<img src="${esc(x.author_photo)}" alt="" referrerpolicy="no-referrer" loading="lazy" />` : `<span class="avatar">${esc((x.author ?? '?').slice(0, 1))}</span>`}
-                    <div><b>${esc(x.author ?? 'Google user')}</b><div class="muted small"><span class="stars-sm">${starIcons(x.rating)}</span> · ${x.published_at ? esc(shortDate(x.published_at.slice(0, 10))) : ''}${r.places.length > 1 ? ` · ${esc(placeName.get(x.place_id) ?? '')}` : ''}${x.language && x.language !== 'en' ? ` · ${esc(x.language.toUpperCase())}` : ''}</div></div>
+                    <div><b>${esc(x.author ?? 'Google user')}</b><div class="muted small"><span class="stars-sm">${starIcons(x.rating)}</span> · ${x.published_at ? esc(shortDate(x.published_at.slice(0, 10))) : ''}${multiPlace ? ` · ${esc(placeName.get(x.place_id) ?? '')}` : ''}${x.language && x.language !== 'en' ? ` · ${esc(x.language.toUpperCase())}` : ''}</div></div>
                   </div>
                   ${x.text ? `<p>${esc(x.text)}</p>` : '<p class="muted">(rating only)</p>'}
-                  ${x.review_uri ? `<a class="link-btn" href="${esc(x.review_uri)}" target="_blank" rel="noreferrer">Open / reply on Google ↗</a>` : ''}
+                  ${x.source === 'gbp' ? replyBlock(x, admin) : x.review_uri ? `<a class="link-btn" href="${esc(x.review_uri)}" target="_blank" rel="noreferrer">Open / reply on Google ↗</a>` : ''}
                 </article>`
                 )
                 .join('')}</div>`
@@ -499,13 +520,20 @@ async function renderReviews(el, ctx) {
         </section>
         <section class="card">
           <div class="card-head"><h2>How this works</h2></div>
-          <p class="muted small" style="line-height:1.6">Google shares the overall rating, the total count and 5 reviews each time the CRM checks (twice a day).
+          ${
+            gbpPlaces.size
+              ? `<p class="muted small" style="line-height:1.6">Reviews come straight from your Google Business Profile – every review, newest first, checked every 2 hours.
+                 Reply right here; the reply appears on Google. “Needs reply” shows what’s still waiting. Use the “leave a review” link in
+                 follow-up e-mails, on flyers and as a QR code at the desk.</p>`
+              : `<p class="muted small" style="line-height:1.6">Google shares the overall rating, the total count and 5 reviews each time the CRM checks (twice a day).
           The CRM keeps every review it has seen, so the list grows from the day you connected it. Use the “leave a review” link in
-          follow-up e-mails, on flyers and as a QR code at the desk.</p>
+          follow-up e-mails, on flyers and as a QR code at the desk.</p>`
+          }
         </section>
       </div>
     </div>`;
 
+  wireGoogle(el, ctx);
   for (const p of r.places) {
     const box = el.querySelector(`[data-spark="${CSS.escape(p.place_id)}"]`);
     if (box) sparkline(box, r.snapshots.filter((s) => s.place_id === p.place_id));
@@ -515,6 +543,25 @@ async function renderReviews(el, ctx) {
     const b = e.target.closest('button');
     if (!b) return;
     const d = b.dataset;
+    if (d.replyOpen !== undefined) {
+      const art = b.closest('[data-review]');
+      art.querySelector('.reply-form').hidden = false;
+      art.querySelector('.reply-form textarea').focus();
+      b.hidden = true;
+      return;
+    }
+    if (d.replyDelete !== undefined) {
+      if (!confirm('Delete your reply on Google?')) return;
+      try {
+        await api('/api/google', { method: 'POST', body: { deleteReply: b.closest('[data-review]').dataset.review } });
+        toast('Reply deleted');
+        await loadReviews(true);
+        renderReviews(el, ctx);
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+      return;
+    }
     if (d.stars !== undefined) {
       v.stars = d.stars;
       renderReviews(el, ctx);
@@ -640,4 +687,118 @@ function deadlinesCard() {
         : '<p class="empty">No deadlines coming up. Add a “ready by” date to a post, or a marketing task with a deadline.</p>'
     }
   </section>`;
+}
+
+// ── Google Business Profile (all reviews, newest first, replies) ──
+const replyBlock = (x, admin) => `
+  ${
+    x.reply_text
+      ? `<div class="reply"><div class="reply-h"><b>Your reply</b><span class="muted small">${x.reply_at ? esc(shortDate(x.reply_at.slice(0, 10))) : ''}</span>
+          ${admin ? '<button type="button" class="link-btn muted" data-reply-open>Edit</button><button type="button" class="link-btn muted" data-reply-delete>Delete</button>' : ''}</div><p>${esc(x.reply_text)}</p></div>`
+      : admin
+        ? '<button type="button" class="btn secondary sm" data-reply-open>Reply</button>'
+        : '<span class="pill">No reply yet</span>'
+  }
+  ${
+    admin
+      ? `<form class="reply-form" hidden><textarea class="input" rows="3" name="comment" placeholder="Thank you for choosing Go! …">${esc(x.reply_text ?? '')}</textarea>
+          <div class="controls"><button class="btn sm" type="submit">${x.reply_text ? 'Update reply' : 'Post reply on Google'}</button></div></form>`
+      : ''
+  }`;
+
+function googleCard(g, admin) {
+  if (!admin && !g.connected) return '';
+  if (!g.configured) {
+    return `<section class="card setup gbp">
+      <div class="card-head"><h2>All reviews, newest first <span class="muted">· Google Business Profile</span></h2></div>
+      <p class="steps">Google’s Places API only shares 5 “most relevant” reviews. The Business Profile API (for owners and managers) gives every review,
+      newest first, and lets you reply from the CRM. It needs Google’s approval of API access (requested) and a sign-in client:</p>
+      <ol class="steps">
+        <li>Google Cloud → project <b>go-crm</b> → <i>APIs &amp; Services → OAuth consent screen</i>: app name <b>Go CRM</b>, your e-mail, audience <b>External</b>, add yourself as a test user, then <b>Publish app</b> (so the sign-in doesn’t expire after 7 days).</li>
+        <li><i>Credentials → Create credentials → OAuth client ID</i> → <b>Web application</b>. Authorised redirect URI: <code>${esc(location.origin)}/api/google/callback</code></li>
+        <li>Cloudflare → go-crm → <i>Settings → Variables and Secrets</i>: Secrets <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code>, then redeploy.</li>
+        <li>After Google’s approval e-mail: enable <b>My Business Account Management API</b>, <b>My Business Business Information API</b> and <b>Google My Business API</b>.</li>
+      </ol>
+    </section>`;
+  }
+  if (!g.connected) {
+    return `<section class="card gbp">
+      <div class="card-head"><h2>All reviews, newest first <span class="muted">· Google Business Profile</span></h2></div>
+      <p class="muted" style="margin-bottom:12px">Sign in with the Google account that manages the Go Car Rental / Go Campers business profiles.
+      You do this once; the CRM then keeps the reviews up to date and you can reply from here.</p>
+      <button class="btn" data-g-connect>Connect Google account</button>
+    </section>`;
+  }
+  const when = (ts) => (ts ? new Date(ts).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–');
+  return `<section class="card gbp">
+    <div class="card-head"><h2>Google Business Profile <span class="pill good">connected</span></h2>
+      ${admin ? '<span class="controls"><button class="btn secondary sm" data-g-sync>Sync now</button><button class="link-btn muted" data-g-disconnect>Disconnect</button></span>' : ''}</div>
+    <p class="muted small">${esc(g.email ?? '')} · last sync ${esc(when(g.last_sync))} · new reviews are checked every 2 hours</p>
+    ${g.error ? `<div class="banner error-banner" style="margin:10px 0 0">${esc(g.error)}</div>` : ''}
+    ${
+      g.locations.length
+        ? `<ul class="gbp-locs">${g.locations
+            .map(
+              (l) => `<li>
+                ${admin ? `<input type="checkbox" data-g-active="${esc(l.name)}" ${l.active ? 'checked' : ''} aria-label="Follow ${esc(l.title)}" />` : ''}
+                <div class="body"><b>${esc(l.title)}</b><span class="muted small">${esc(l.address ?? '')}${l.total != null ? ` · ${num(l.total)} reviews · ★ ${Number(l.average ?? 0).toFixed(1)}` : ''}</span></div>
+                ${admin ? `<select class="input sm-input" data-g-label="${esc(l.name)}" aria-label="Brand">${options([{ value: 'car', label: 'Go Car Rentals' }, { value: 'camper', label: 'Go Campers' }, { value: 'other', label: 'Other' }], l.label)}</select>` : ''}
+              </li>`
+            )
+            .join('')}</ul>`
+        : `<p class="muted small" style="margin-top:10px">No business locations found yet.${admin ? ' <button class="link-btn" data-g-locs>Look again</button>' : ''}</p>`
+    }
+  </section>`;
+}
+
+function wireGoogle(el, ctx) {
+  const rerender = async (data) => {
+    if (data) reviewsCache = { ...(reviewsCache ?? {}), google: data };
+    await loadReviews(true);
+    renderReviews(el, ctx);
+  };
+  const call = async (body, okMsg, btn) => {
+    if (btn) btn.disabled = true;
+    try {
+      const data = await api('/api/google', { method: 'POST', body });
+      if (okMsg) toast(typeof okMsg === 'function' ? okMsg(data) : okMsg);
+      return data;
+    } catch (err) {
+      toast(err.message, 'error');
+      if (btn) btn.disabled = false;
+      return null;
+    }
+  };
+  el.querySelector('[data-g-connect]')?.addEventListener('click', async (e) => {
+    const data = await call({ connect: true }, null, e.target);
+    if (data?.url) location.href = data.url;
+  });
+  el.querySelector('[data-g-sync]')?.addEventListener('click', async (e) => {
+    e.target.textContent = 'Syncing…';
+    if (await call({ sync: true }, (d) => `Synced ${d.synced} reviews`, e.target)) rerender();
+    else rerender();
+  });
+  el.querySelector('[data-g-locs]')?.addEventListener('click', async (e) => {
+    if (await call({ refreshLocations: true }, 'Locations updated', e.target)) rerender();
+  });
+  el.querySelector('[data-g-disconnect]')?.addEventListener('click', async (e) => {
+    if (!confirm('Disconnect the Google account? Collected reviews stay in the CRM.')) return;
+    if (await call({ disconnect: true }, 'Disconnected', e.target)) rerender();
+  });
+  el.querySelectorAll('[data-g-active]').forEach((cb) =>
+    cb.addEventListener('change', async () => {
+      if (await call({ location: { name: cb.dataset.gActive, active: cb.checked } }, cb.checked ? 'Following this location' : 'Stopped following')) rerender();
+    })
+  );
+  el.querySelectorAll('[data-g-label]').forEach((sel) => sel.addEventListener('change', () => call({ location: { name: sel.dataset.gLabel, label: sel.value } }, 'Saved')));
+  el.querySelectorAll('.reply-form').forEach((form) =>
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = form.closest('[data-review]').dataset.review;
+      const btn = form.querySelector('button[type=submit]');
+      btn.textContent = 'Posting…';
+      if (await call({ reply: { review_id: id, comment: form.comment.value } }, 'Reply posted on Google ✓', btn)) rerender();
+      else btn.textContent = 'Post reply on Google';
+    })
+  );
 }

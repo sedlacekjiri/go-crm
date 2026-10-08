@@ -853,3 +853,19 @@ button.row:hover { background: var(--surface-2); }
   .mcal.month .dchip { padding: 0; border: 0; background: none !important; font-size: 9px; }
   .mcal.month .dchip .tx { display: none; }
 }
+
+/* ── Google Business Profile ───────────── */
+.gbp { margin-bottom: 12px; }
+.gbp-locs { list-style: none; display: flex; flex-direction: column; margin-top: 10px; }
+.gbp-locs li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.gbp-locs li:first-child { border-top: 0; }
+.gbp-locs input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--btn); flex-shrink: 0; }
+.gbp-locs .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.reply { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-top: 4px; }
+.reply-h { display: flex; gap: 10px; align-items: baseline; margin-bottom: 2px; font-size: 12px; }
+.reply-h .link-btn { font-size: 12px; }
+.reply-h .link-btn:first-of-type { margin-left: auto; }
+.reply p { font-size: 13px; color: var(--text-2); margin: 0; }
+.reply-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.reply-form[hidden] { display: none; }
+[hidden] { display: none !important; }

@@ -8,8 +8,10 @@
 
 import { authorize, bad, json, now, oneOf, readJson, str } from '../_lib/db.js';
 import { refreshPlace, searchPlaces } from '../_lib/google.js';
+import { status as gbpStatus, syncAll } from '../_lib/gbp.js';
 
 const STALE_MS = 12 * 3600 * 1000;
+const GBP_STALE_MS = 2 * 3600 * 1000; // Business Profile: newest reviews every 2 hours
 const LABELS = ['car', 'camper', 'other'];
 
 async function payload(env) {
@@ -17,9 +19,9 @@ async function payload(env) {
   const [places, snapshots, reviews] = await db.batch([
     db.prepare('SELECT * FROM review_places ORDER BY created_at'),
     db.prepare(`SELECT * FROM review_snapshots WHERE day >= date('now', '-400 days') ORDER BY day`),
-    db.prepare('SELECT * FROM reviews ORDER BY published_at DESC LIMIT 300'),
+    db.prepare('SELECT * FROM reviews ORDER BY published_at DESC LIMIT 500'),
   ]);
-  return { configured: !!env.GOOGLE_PLACES_API_KEY, places: places.results, snapshots: snapshots.results, reviews: reviews.results };
+  return { configured: !!env.GOOGLE_PLACES_API_KEY, places: places.results, snapshots: snapshots.results, reviews: reviews.results, google: await gbpStatus(env) };
 }
 
 export async function onRequestGet({ request, env }) {
@@ -31,6 +33,8 @@ export async function onRequestGet({ request, env }) {
     const stale = results.filter((p) => !p.fetched_at || Date.now() - Date.parse(p.fetched_at) > STALE_MS);
     await Promise.all(stale.map((p) => refreshPlace(env.DB, key, p.place_id)));
   }
+  const g = await env.DB.prepare(`SELECT last_sync FROM google_auth WHERE id = 'main'`).first();
+  if (g && (!g.last_sync || Date.now() - Date.parse(g.last_sync) > GBP_STALE_MS)) await syncAll(env);
   return json(await payload(env));
 }
 
