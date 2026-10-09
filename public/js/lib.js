@@ -3,8 +3,11 @@
 
 // ── Constants ──────────────────────────────────────────────────
 export const PARTNER_TYPES = [
-  { value: 'hotel', label: 'Hotels', singular: 'Hotel' },
-  { value: 'guesthouse', label: 'Guesthouses', singular: 'Guesthouse' },
+  // capacity: what the "size" number means for this kind of place; stars: hotels & guesthouses only.
+  { value: 'hotel', label: 'Hotels', singular: 'Hotel', capacity: 'rooms', stars: true },
+  { value: 'guesthouse', label: 'Guesthouses', singular: 'Guesthouse', capacity: 'rooms', stars: true },
+  { value: 'hostel', label: 'Hostels', singular: 'Hostel', capacity: 'beds' },
+  { value: 'campsite', label: 'Campsites', singular: 'Campsite', capacity: 'pitches' },
   { value: 'ota', label: 'OTA', singular: 'OTA' },
   { value: 'cafe', label: 'Cafés', singular: 'Café' },
   { value: 'other', label: 'Other', singular: 'Other' },
@@ -171,6 +174,10 @@ export const GOAL_METRICS = [
 const find = (list, v) => list.find((x) => x.value === v);
 export const stageLabel = (s) => find(STAGES, s)?.label ?? s;
 export const typeLabel = (t) => find(PARTNER_TYPES, t)?.singular ?? t;
+export const capacityOf = (t) => find(PARTNER_TYPES, t)?.capacity ?? null;
+export const hasStars = (t) => !!find(PARTNER_TYPES, t)?.stars;
+// "99 rooms" / "40 beds" / "120 pitches" (the size field is stored as `rooms`).
+export const capacityText = (p) => (p.rooms && capacityOf(p.type) ? `${p.rooms} ${capacityOf(p.type)}` : null);
 export const interestLabel = (i) => find(INTEREST, i)?.label ?? '–';
 export const activityLabel = (t) => find(ACTIVITY_TYPES, t)?.label ?? t;
 export const brandLabel = (b) => find(BRANDS, b)?.label ?? 'Unknown';

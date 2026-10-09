@@ -1,6 +1,6 @@
 // One partner: pipeline controls, quick visit logging, contacts, activity log, affiliate results.
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
-import { ACTIVITY_TYPES, activityLabel, brandLabel, codeKey, INTEREST, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
+import { ACTIVITY_TYPES, activityLabel, brandLabel, capacityText, codeKey, INTEREST, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
 import { affiliateModal, affiliateRows, wireAffiliateRows } from './affiliates.js';
 import { planVisits } from './tasks.js';
@@ -34,7 +34,7 @@ export async function render(page, { params, refresh, isCurrent }) {
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
         <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
-          <span class="muted small">${esc([typeLabel(p.type), p.area, p.rooms ? `${p.rooms} rooms` : null, p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
+          <span class="muted small">${esc([typeLabel(p.type), p.area, capacityText(p), p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>
       ${admin ? `<div class="controls"><a class="btn secondary" href="#/partner/${p.id}/edit">Edit</a><button class="btn secondary" data-plan-visit>Plan visit</button><button class="btn" data-log>+ Log visit</button></div>` : ''}

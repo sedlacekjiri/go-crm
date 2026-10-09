@@ -30,7 +30,7 @@ const suggestCode = (name, partner) => {
       .split(/\s+/);
   const first = clean(name)[0]?.toUpperCase() ?? '';
   const hotel = clean(partner?.name)
-    .filter((w) => !/^(hotel|guesthouse|hostel|reykjavik|the)$/i.test(w))[0]
+    .filter((w) => !/^(hotel|guesthouse|hostel|campsite|camping|reykjavik|the)$/i.test(w))[0]
     ?.toUpperCase();
   return [first, hotel].filter(Boolean).join('-').slice(0, 24);
 };

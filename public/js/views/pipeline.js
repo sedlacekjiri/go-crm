@@ -1,7 +1,7 @@
 // Kanban for walking in: To visit → Visited → Interested → Partner / Declined.
 // Cards move with ← → (works on phones). "To visit" is grouped by area to plan a route.
 import { followUpPill, interestBadge, kpi, pageHeader } from '../components.js';
-import { nextPlannedVisit, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
+import { capacityText, nextPlannedVisit, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, options, shortDate, toast } from '../util.js';
 
@@ -45,7 +45,7 @@ export function render(page, { refresh }) {
               (p) => `<div class="kcard">
                 <a href="#/partner/${p.id}">
                   <div class="name">${esc(p.name)}</div>
-                  <div class="meta">${esc([p.area?.replace(/\s*\(.*\)/, ''), p.rooms ? `${p.rooms} rooms` : null].filter(Boolean).join(' · ') || ' ')}</div>
+                  <div class="meta">${esc([p.area?.replace(/\s*\(.*\)/, ''), capacityText(p)].filter(Boolean).join(' · ') || ' ')}</div>
                   ${visits.get(p.id) ? `<div class="meta">${visits.get(p.id).count}× visited · last ${shortDate(visits.get(p.id).last)}</div>` : ''}
                   <div class="tags">${interestBadge(p.interest)}${(() => {
                     const d = nextPlannedVisit(p.id, state.tasks);

@@ -1,7 +1,7 @@
 // Add / edit a partner – a step-by-step form in plain words:
 //   1 The place · 2 Who you talked to (new only) · 3 Where you are with them · 4 Partnership (only for partners)
 import { emptyBox, pageHeader } from '../components.js';
-import { AREAS, INTEREST, PARTNER_TYPES, shiftDate, today } from '../lib.js';
+import { AREAS, capacityOf, hasStars, INTEREST, PARTNER_TYPES, shiftDate, today } from '../lib.js';
 import { api, isAdmin, loadData, state } from '../store.js';
 import { esc, formData, options, toast } from '../util.js';
 
@@ -42,7 +42,7 @@ export function render(page, { params, query }) {
 
   page.innerHTML = `
     <a class="back" href="${editing ? `#/partner/${p.id}` : `#/partners?type=${p.type}`}">← Back</a>
-    ${pageHeader(editing ? `Edit ${p.name}` : 'Add a place', editing ? '' : 'A hotel, guesthouse, café… that you want to work with. Only the name is required – the rest can be filled in later.')}
+    ${pageHeader(editing ? `Edit ${p.name}` : 'Add a place', editing ? '' : 'A hotel, guesthouse, hostel, campsite, café… that you want to work with. Only the name is required – the rest can be filled in later.')}
     <form class="stack" id="partnerForm" novalidate>
 
       <section class="card step">
@@ -55,9 +55,9 @@ export function render(page, { params, query }) {
           <label class="field"><span>Area</span><select class="input" name="area">${options(AREAS, p.area, { empty: '–' })}</select></label>
           <label class="field"><span>Street address</span><input class="input" name="address" value="${v('address')}" placeholder="Pósthússtræti 11" /></label>
         </div>
-        <div class="form-grid" data-hotel-only>
-          <label class="field"><span>Number of rooms</span><input class="input" type="number" inputmode="numeric" min="0" name="rooms" value="${v('rooms')}" placeholder="e.g. 99" /><small>Bigger hotels = more guests who need a car.</small></label>
-          <div class="field"><span>Stars</span><div class="chips" data-stars>${[1, 2, 3, 4, 5]
+        <div class="form-grid" data-size-row>
+          <label class="field" data-capacity-field><span data-capacity-label>Number of rooms</span><input class="input" type="number" inputmode="numeric" min="0" name="rooms" value="${v('rooms')}" placeholder="e.g. 99" /><small data-capacity-hint></small></label>
+          <div class="field" data-stars-field><span>Stars</span><div class="chips" data-stars>${[1, 2, 3, 4, 5]
             .map((s) => `<button type="button" data-v="${s}" aria-pressed="${stars === s}">${'★'.repeat(s)}</button>`)
             .join('')}</div></div>
         </div>
@@ -138,7 +138,16 @@ export function render(page, { params, query }) {
   const show = (sel, on) => page.querySelectorAll(sel).forEach((el) => el.classList.toggle('hidden', !on));
 
   const sync = () => {
-    show('[data-hotel-only]', type === 'hotel' || type === 'guesthouse');
+    // Size means rooms, beds or pitches depending on the kind of place; stars only for hotels & guesthouses.
+    const cap = capacityOf(type);
+    show('[data-size-row]', !!cap);
+    show('[data-capacity-field]', !!cap);
+    show('[data-stars-field]', hasStars(type));
+    if (cap) {
+      page.querySelector('[data-capacity-label]').textContent = `Number of ${cap}`;
+      page.querySelector('[data-capacity-hint]').textContent =
+        cap === 'pitches' ? 'More pitches = more campers & road-trippers.' : cap === 'beds' ? 'Busy hostels = lots of young travellers renting together.' : 'Bigger hotels = more guests who need a car.';
+    }
     show('[data-open-only]', ['new', 'contacted', 'in_talks'].includes(stage));
     show('[data-declined-only]', stage === 'declined');
     show('[data-partner-only]', stage === 'accepted');
@@ -176,8 +185,8 @@ export function render(page, { params, query }) {
       type,
       area: f.area || null,
       address: f.address,
-      rooms: type === 'hotel' || type === 'guesthouse' ? f.rooms : null,
-      stars: type === 'hotel' || type === 'guesthouse' ? stars : null,
+      rooms: capacityOf(type) ? f.rooms : null,
+      stars: hasStars(type) ? stars : null,
       phone: f.phone,
       email: f.email,
       website: f.website,

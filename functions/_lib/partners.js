@@ -2,7 +2,7 @@
 
 import { codeOwner, int, isDate, now, oneOf, str, uuid } from './db.js';
 
-export const TYPES = ['hotel', 'guesthouse', 'ota', 'cafe', 'other'];
+export const TYPES = ['hotel', 'guesthouse', 'hostel', 'campsite', 'ota', 'cafe', 'other'];
 const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined'];
 
 const FIELDS = {

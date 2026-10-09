@@ -380,3 +380,15 @@ describe('marketing deadlines', () => {
     assert.deepEqual(overdue('2026-10-07', { tasks, partners: [], posts }).posts.map((p) => p.id), ['p3']);
   });
 });
+
+describe('partner types', () => {
+  it('describes size by kind of place', async () => {
+    const { capacityText, hasStars } = await import('../public/js/lib.js');
+    assert.equal(capacityText({ type: 'hotel', rooms: 99 }), '99 rooms');
+    assert.equal(capacityText({ type: 'hostel', rooms: 40 }), '40 beds');
+    assert.equal(capacityText({ type: 'campsite', rooms: 120 }), '120 pitches');
+    assert.equal(capacityText({ type: 'cafe', rooms: 10 }), null);
+    assert.equal(hasStars('campsite'), false);
+    assert.equal(hasStars('guesthouse'), true);
+  });
+});
