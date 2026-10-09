@@ -1,17 +1,20 @@
 // Partner list with type tabs, search, area / stage filters and bulk add.
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
-import { AREAS, capacityText, PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
+import { AREAS, capacityText, chainCounts, chainSuggestions, PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { renderOverview } from './affiliates.js';
 import { esc, openModal, options, shortDate, toast } from '../util.js';
 
 // Filters survive navigating to a partner and back.
-const filters = { query: '', stage: '', area: '', sort: 'name' };
+const filters = { query: '', stage: '', area: '', chain: '', sort: 'name' };
 
 export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
   const type = PARTNER_TYPES.some((t) => t.value === query.get('type')) ? query.get('type') : 'hotel';
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
+  // A chain filter from another tab doesn't apply here (and its select may not even be shown).
+  const typeChains = new Set(state.partners.filter((x) => x.type === type && x.chain).map((x) => x.chain));
+  if (filters.chain && (!typeChains.size || (filters.chain !== '__none' && !typeChains.has(filters.chain)))) filters.chain = '';
   const lastContact = new Map();
   for (const a of state.activities) if (!lastContact.has(a.partner_id)) lastContact.set(a.partner_id, a.happened_at);
   const visits = visitStats(state.activities);
@@ -34,8 +37,18 @@ export function render(page, { query, refresh, isCurrent }) {
     )}
     ${tabs}
     <div class="toolbar">
-      <input class="input grow" type="search" placeholder="Search name, address, code…" value="${esc(filters.query)}" data-f="query" />
+      <input class="input grow" type="search" placeholder="Search name, chain, address, code…" value="${esc(filters.query)}" data-f="query" />
       <select class="input" data-f="area" aria-label="Area">${options(AREAS, filters.area, { empty: 'All areas' })}</select>
+      ${(() => {
+        const chains = chainCounts(state.partners.filter((x) => x.type === type));
+        if (!chains.length) return '';
+        const independent = state.partners.filter((x) => x.type === type && !x.chain).length;
+        return `<select class="input" data-f="chain" aria-label="Chain">${options(
+          [{ value: '__none', label: `Independent (${independent})` }, ...chains.map((c) => ({ value: c.chain, label: `${c.chain} (${c.n})` }))],
+          filters.chain,
+          { empty: 'All chains' }
+        )}</select>`;
+      })()}
       <select class="input" data-f="sort" aria-label="Sort">${options(
         [
           { value: 'name', label: 'Sort: Name' },
@@ -63,7 +76,8 @@ export function render(page, { query, refresh, isCurrent }) {
         p.type === type &&
         (!filters.stage || p.stage === filters.stage) &&
         (!filters.area || p.area === filters.area) &&
-        (!q || [p.name, p.address, p.affiliate_code, p.notes].some((v) => v && v.toLowerCase().includes(q)))
+        (!filters.chain || (filters.chain === '__none' ? !p.chain : p.chain === filters.chain)) &&
+        (!q || [p.name, p.chain, p.address, p.affiliate_code, p.notes].some((v) => v && v.toLowerCase().includes(q)))
     );
     const cmp = {
       name: (a, b) => a.name.localeCompare(b.name),
@@ -78,7 +92,7 @@ export function render(page, { query, refresh, isCurrent }) {
             const v = visits.get(p.id);
             const meta = [p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
             return `<a class="prow" href="#/partner/${p.id}">
-              <div class="main"><div class="name"><span>${esc(p.name)}</span>${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
+              <div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
               <div class="tags">${stageBadge(p.stage)}${interestBadge(p.interest)}${
                 p.stage === 'accepted' ? (p.affiliate_code ? `<span class="code">${esc(p.affiliate_code)}</span>` : '') : p.stage !== 'declined' ? followUpPill(p.next_follow_up) : ''
               }</div></a>`;
@@ -117,6 +131,8 @@ function bulkAdd(type, refresh) {
         <label class="field"><span>Type</span><select class="input" name="type">${options(PARTNER_TYPES.map((t) => ({ value: t.value, label: t.singular })), type)}</select></label>
         <label class="field"><span>Area (optional)</span><select class="input" name="area">${options(AREAS, '', { empty: '–' })}</select></label>
       </div>
+      <label class="field"><span>Hotel chain (optional)</span><input class="input" name="chain" list="bulkChains" placeholder="e.g. Center Hotels" autocomplete="off" />
+        <datalist id="bulkChains">${chainSuggestions(state.partners).map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></label>
       <button class="btn block" type="submit">Add partners</button>
     </form>`
   );
@@ -131,7 +147,7 @@ function bulkAdd(type, refresh) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const { added } = await api('/api/partners', { method: 'POST', body: { bulk: names(), type: form.type.value, area: form.area.value || null } });
+      const { added } = await api('/api/partners', { method: 'POST', body: { bulk: names(), type: form.type.value, area: form.area.value || null, chain: form.chain.value.trim() || null } });
       m.close();
       toast(`Added ${added} partners`);
       refresh();

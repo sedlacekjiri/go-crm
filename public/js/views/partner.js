@@ -33,7 +33,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     <div class="detail-head">
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
-        <div class="badges">${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
+        <div class="badges">${p.chain ? `<span class="chain-tag">${esc(p.chain)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
           <span class="muted small">${esc([typeLabel(p.type), p.area, capacityText(p), p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>

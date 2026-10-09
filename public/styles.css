@@ -876,3 +876,5 @@ button.row:hover { background: var(--surface-2); }
 .cl-inline .tick, .post-card .tick { width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%; border: 1.5px solid var(--border); background: transparent; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; padding: 0; }
 .cl-inline .tick.on { background: var(--good); border-color: var(--good); }
 .modal .field > .link-btn { margin-top: 2px; }
+.chain-tag { font-style: normal; font-size: 11px; font-weight: 700; color: var(--car); background: color-mix(in srgb, var(--car) 12%, transparent); border-radius: 6px; padding: 1px 7px; white-space: nowrap; flex-shrink: 0; }
+.chain-tag.sm { font-size: 10px; padding: 0 5px; vertical-align: 1px; }

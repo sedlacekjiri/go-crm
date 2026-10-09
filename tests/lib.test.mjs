@@ -392,3 +392,15 @@ describe('partner types', () => {
     assert.equal(hasStars('guesthouse'), true);
   });
 });
+
+describe('hotel chains', () => {
+  it('counts chains and suggests known ones without duplicates', async () => {
+    const { chainCounts, chainSuggestions } = await import('../public/js/lib.js');
+    const partners = [{ chain: 'Hilton' }, { chain: 'Center Hotels' }, { chain: 'Center Hotels' }, { chain: null }];
+    assert.deepEqual(chainCounts(partners), [{ chain: 'Center Hotels', n: 2 }, { chain: 'Hilton', n: 1 }]);
+    const s = chainSuggestions(partners);
+    assert.deepEqual(s.slice(0, 2), ['Center Hotels', 'Hilton']);
+    assert.equal(s.filter((x) => x.toLowerCase() === 'hilton').length, 1);
+    assert.ok(s.includes('Keahotels'));
+  });
+});

@@ -44,7 +44,7 @@ export function render(page, { refresh }) {
             .map(
               (p) => `<div class="kcard">
                 <a href="#/partner/${p.id}">
-                  <div class="name">${esc(p.name)}</div>
+                  <div class="name">${esc(p.name)}${p.chain ? ` <em class="chain-tag sm">${esc(p.chain)}</em>` : ''}</div>
                   <div class="meta">${esc([p.area?.replace(/\s*\(.*\)/, ''), capacityText(p)].filter(Boolean).join(' · ') || ' ')}</div>
                   ${visits.get(p.id) ? `<div class="meta">${visits.get(p.id).count}× visited · last ${shortDate(visits.get(p.id).last)}</div>` : ''}
                   <div class="tags">${interestBadge(p.interest)}${(() => {

@@ -1,7 +1,7 @@
 // Add / edit a partner – a step-by-step form in plain words:
 //   1 The place · 2 Who you talked to (new only) · 3 Where you are with them · 4 Partnership (only for partners)
 import { emptyBox, pageHeader } from '../components.js';
-import { AREAS, capacityOf, hasStars, INTEREST, PARTNER_TYPES, shiftDate, today } from '../lib.js';
+import { AREAS, capacityOf, chainSuggestions, hasStars, INTEREST, PARTNER_TYPES, shiftDate, today } from '../lib.js';
 import { api, isAdmin, loadData, state } from '../store.js';
 import { esc, formData, options, toast } from '../util.js';
 
@@ -51,6 +51,10 @@ export function render(page, { params, query }) {
         <div class="field"><span>Type</span><div class="chips wrap-chips" data-type>${PARTNER_TYPES.map(
           (t) => `<button type="button" data-v="${t.value}" aria-pressed="${type === t.value}">${t.singular}</button>`
         ).join('')}</div></div>
+        <label class="field"><span>Hotel chain <em class="muted">(optional)</em></span>
+          <input class="input" name="chain" list="chainList" value="${v('chain')}" placeholder="e.g. Hilton, Center Hotels – leave empty if independent" autocomplete="off" />
+          <datalist id="chainList">${chainSuggestions(state.partners).map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist>
+          <small>Type a new one or pick from the list – partners of the same chain are grouped in the filter.</small></label>
         <div class="form-grid">
           <label class="field"><span>Area</span><select class="input" name="area">${options(AREAS, p.area, { empty: '–' })}</select></label>
           <label class="field"><span>Street address</span><input class="input" name="address" value="${v('address')}" placeholder="Pósthússtræti 11" /></label>
@@ -183,6 +187,7 @@ export function render(page, { params, query }) {
     const body = {
       name: f.name,
       type,
+      chain: f.chain?.trim() || null,
       area: f.area || null,
       address: f.address,
       rooms: capacityOf(type) ? f.rooms : null,

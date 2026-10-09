@@ -225,6 +225,7 @@ const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN subtasks TEXT`, // JSON: [{ id, title, done }]
   `ALTER TABLE posts ADD COLUMN deadline TEXT`, // content ready by
   `ALTER TABLE posts ADD COLUMN subtasks TEXT`, // JSON checklist, like tasks.subtasks
+  `ALTER TABLE partners ADD COLUMN chain TEXT`, // hotel chain, e.g. Hilton, Center Hotels
   // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
   `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
   `ALTER TABLE reviews ADD COLUMN location TEXT`,

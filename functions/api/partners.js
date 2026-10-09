@@ -1,6 +1,6 @@
 // /api/partners (admin only)
 //   POST   { id?, ...fields }            create, or update only the fields that are sent
-//   POST   { bulk: [names], type, area } add many partners at once (existing names are skipped)
+//   POST   { bulk: [names], type, area, chain } add many partners at once (existing names are skipped)
 //   DELETE ?id=…                          delete a partner with its contacts and activity log
 
 import { authorize, bad, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
@@ -17,14 +17,15 @@ export async function onRequestPost({ request, env }) {
     const known = new Set(existing.results.map((r) => r.n));
     const type = oneOf(body.type, TYPES, 'hotel');
     const area = str(body.area, 100);
+    const chain = str(body.chain, 100);
     const names = [...new Set(body.bulk.map((n) => str(n, 200)).filter(Boolean))].filter((n) => !known.has(n.toLowerCase()));
     const t = now();
     if (names.length) {
       await env.DB.batch(
         names.map((name) =>
           env.DB.prepare(
-            `INSERT INTO partners (id, name, type, area, stage, created_at, updated_at) VALUES (?, ?, ?, ?, 'new', ?, ?)`
-          ).bind(uuid(), name, type, area, t, t)
+            `INSERT INTO partners (id, name, type, area, chain, stage, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'new', ?, ?)`
+          ).bind(uuid(), name, type, area, chain, t, t)
         )
       );
     }

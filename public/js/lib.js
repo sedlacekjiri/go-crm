@@ -173,6 +173,21 @@ export const GOAL_METRICS = [
 
 const find = (list, v) => list.find((x) => x.value === v);
 export const stageLabel = (s) => find(STAGES, s)?.label ?? s;
+// Hotel chains in Iceland, suggested when tagging a partner (plus any chain already in the CRM).
+export const KNOWN_CHAINS = ['Center Hotels', 'Fosshotel / Íslandshótel', 'Keahotels', 'Iceland Hotel Collection by Berjaya', 'Hilton', 'Marriott', 'Radisson'];
+
+// Chains used in the CRM with how many partners each has, most used first.
+export function chainCounts(partners) {
+  const counts = new Map();
+  for (const p of partners) if (p.chain) counts.set(p.chain, (counts.get(p.chain) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([chain, n]) => ({ chain, n }));
+}
+
+export function chainSuggestions(partners) {
+  const used = chainCounts(partners).map((c) => c.chain);
+  return [...used, ...KNOWN_CHAINS.filter((k) => !used.some((u) => u.toLowerCase() === k.toLowerCase()))];
+}
+
 export const typeLabel = (t) => find(PARTNER_TYPES, t)?.singular ?? t;
 export const capacityOf = (t) => find(PARTNER_TYPES, t)?.capacity ?? null;
 export const hasStars = (t) => !!find(PARTNER_TYPES, t)?.stars;

@@ -7,6 +7,7 @@ const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined'];
 
 const FIELDS = {
   name: (v) => str(v, 200),
+  chain: (v) => str(v, 100),
   type: (v) => oneOf(v, TYPES, 'hotel'),
   area: (v) => str(v, 100),
   address: (v) => str(v, 300),
