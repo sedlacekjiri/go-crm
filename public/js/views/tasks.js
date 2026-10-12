@@ -2,7 +2,7 @@
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
-import { api, can, isAdmin, state, userById } from '../store.js';
+import { api, can, isAdmin, isTeamAdmin, state, userById } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -446,15 +446,11 @@ export function taskModal(task, refresh) {
     `<form>
       ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, prepare summer campaign…" /></label>
       <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.filter((c) => can(c.value) || c.value === task.category).map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || defaultCategory()) === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>
-      ${
-        state.users.length > 1
-          ? `<label class="field"><span>Assign to</span><select class="input" name="assignee_id">${options(
-              state.users.map((u) => ({ value: u.id, label: u.id === state.me?.id ? `${u.name} (me)` : u.name })),
-              task.assignee_id,
-              { empty: 'Nobody – stays with whoever created it' }
-            )}</select></label>`
-          : ''
-      }`}
+      <label class="field"><span>Assign to</span><select class="input" name="assignee_id">${options(
+        state.users.map((u) => ({ value: u.id, label: u.id === state.me?.id ? `${u.name} (me)` : u.name })),
+        task.assignee_id,
+        { empty: 'Nobody – stays with whoever created it' }
+      )}</select>${state.users.length < 2 ? `<small>Only you so far${isTeamAdmin() ? ' – add colleagues in Team (sidebar)' : ''}.</small>` : ''}</label>`}
       <div class="form-grid${isVisit ? '' : ' three'}">
         ${isVisit ? '' : `<label class="field"><span>Start (optional)</span><input class="input" type="date" name="start_date" value="${esc(task.start_date ?? '')}" /><small>For longer tasks</small></label>`}
         <label class="field"><span>${isVisit ? 'Visit on' : 'Deadline / date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>

@@ -82,4 +82,7 @@ export function avatar(u, size = 28) {
   return `<span class="avatar-ini" style="${style};background:${color};font-size:${Math.round(size * 0.4)}px">${esc(initials || '?')}</span>`;
 }
 
+// Small round photo of whoever a task is assigned to (nothing when unassigned).
+export const assigneeAvatar = (u, size = 22) => (u ? `<span class="who" title="Assigned to ${esc(u.name)}">${avatar(u, size)}</span>` : '');
+
 export const roleLabel = (r) => ({ owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'View only' })[r] ?? r;
