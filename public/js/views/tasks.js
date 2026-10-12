@@ -2,7 +2,7 @@
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
-import { api, can, isAdmin, isTeamAdmin, state, taskPerson } from '../store.js';
+import { api, can, isAdmin, isTeamAdmin, state, taskPerson, userById } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -441,16 +441,17 @@ export function planVisits(date, refresh, preselect = []) {
 export function taskModal(task, refresh) {
   const isVisit = task.type === 'visit';
   const partner = state.partners.find((p) => p.id === task.partner_id);
+  // Whose task it is now: the assignee, else whoever created it; a new task starts as mine.
+  let assigned = task.assignee_id ?? (task.id ? task.created_by ?? 'owner' : state.me?.id) ?? null;
+  if (!userById(assigned)) assigned = null;
   const m = openModal(
     task.id ? (isVisit ? `Visit – ${partner?.name ?? ''}` : 'Edit task') : 'New task',
     `<form>
       ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, prepare summer campaign…" /></label>
       <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.filter((c) => can(c.value) || c.value === task.category).map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || defaultCategory()) === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>
-      <label class="field"><span>Assign to</span><select class="input" name="assignee_id">${options(
-        state.users.map((u) => ({ value: u.id, label: u.id === state.me?.id ? `${u.name} (me)` : u.name })),
-        task.assignee_id,
-        { empty: 'Nobody – stays with whoever created it' }
-      )}</select>${state.users.length < 2 ? `<small>Only you so far${isTeamAdmin() ? ' – add colleagues in Team (sidebar)' : ''}.</small>` : ''}</label>`}
+      <div class="field"><span>Assigned to</span><div class="chips wrap-chips people" data-assignee>${state.users
+        .map((u) => `<button type="button" data-v="${u.id}" aria-pressed="${u.id === assigned}">${avatar(u, 22)}${esc(u.id === state.me?.id ? `${u.name.split(' ')[0]} (me)` : u.name.split(' ')[0])}</button>`)
+        .join('')}</div>${state.users.length < 2 ? `<small>Only you so far${isTeamAdmin() ? ' – add colleagues in Team (sidebar) to hand tasks over' : ''}.</small>` : ''}</div>`}
       <div class="form-grid${isVisit ? '' : ' three'}">
         ${isVisit ? '' : `<label class="field"><span>Start (optional)</span><input class="input" type="date" name="start_date" value="${esc(task.start_date ?? '')}" /><small>For longer tasks</small></label>`}
         <label class="field"><span>${isVisit ? 'Visit on' : 'Deadline / date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>
@@ -523,10 +524,16 @@ export function taskModal(task, refresh) {
     cat = b.dataset.v;
     m.el.querySelectorAll('[data-category] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   });
+  m.el.querySelector('[data-assignee]')?.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-v]');
+    if (!b) return;
+    assigned = b.dataset.v;
+    m.el.querySelectorAll('[data-assignee] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(form);
-    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, ...('assignee_id' in f ? { assignee_id: f.assignee_id || null } : {}) }) };
+    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, ...(assigned ? { assignee_id: assigned } : {}) }) };
     if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
       await api('/api/tasks', { method: 'POST', body });

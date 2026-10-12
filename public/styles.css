@@ -943,3 +943,5 @@ button.row:hover { background: var(--surface-2); }
 .who { display: inline-flex; flex-shrink: 0; }
 .dl-who { display: inline-flex; min-width: 22px; justify-content: center; }
 .row-end { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.chips.people button { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
+.chips.people button[aria-pressed="true"] .avatar-img, .chips.people button[aria-pressed="true"] .avatar-ini { box-shadow: 0 0 0 2px var(--btn-text); }
