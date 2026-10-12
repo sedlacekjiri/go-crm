@@ -911,3 +911,4 @@ button.row:hover { background: var(--surface-2); }
   .collab-card .table-wrap { display: none; }
   .collab-cards { display: block; }
 }
+.import-sheets td, .import-sheets th { padding: 6px; } .import-sheets tr.muted td { color: var(--text-3); }

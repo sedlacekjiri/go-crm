@@ -253,6 +253,8 @@ const MIGRATIONS = [
   `ALTER TABLE posts ADD COLUMN deadline TEXT`, // content ready by
   `ALTER TABLE posts ADD COLUMN subtasks TEXT`, // JSON checklist, like tasks.subtasks
   `ALTER TABLE partners ADD COLUMN chain TEXT`, // hotel chain, e.g. Hilton, Center Hotels
+  `ALTER TABLE collaborators ADD COLUMN import_key TEXT`, // spreadsheet row identity, so re-imports update
+  `CREATE UNIQUE INDEX IF NOT EXISTS collaborators_import ON collaborators (import_key)`,
   // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
   `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
   `ALTER TABLE reviews ADD COLUMN location TEXT`,

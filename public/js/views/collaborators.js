@@ -2,11 +2,15 @@
 // Flow: Request → Agreed (booking) → [upcoming / on the trip / content overdue – from the dates]
 //       → Content delivered (refund to pay) → Refunded & done.
 import { emptyBox, kpi, pageHeader } from '../components.js';
-import { COLLAB_PHASE_LABELS, COLLAB_STATUSES, collabPhase, collabTotals, parseSocials, today } from '../lib.js';
+import { COLLAB_PHASE_LABELS, COLLAB_STATUSES, collabPhase, collabTotals, decodeText, parseCollabSheet, parseSocials, sheetInfo, today } from '../lib.js';
+
+const PAPA = 'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/+esm';
+const XLSX = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
 import { api, isAdmin, state } from '../store.js';
 import { esc, formData, money, num, openModal, options, shortDate, toast } from '../util.js';
 
-const v = { phase: '', q: '', brand: '', handler: '' };
+const v = { phase: '', q: '', brand: '', handler: '', year: '' };
+const yearOf = (c) => (c.pickup_date ?? c.created_at ?? '').slice(0, 4);
 
 const PHASE_FILTERS = ['request', 'upcoming', 'on_trip', 'overdue', 'delivered', 'done', 'declined'];
 const phaseBadge = (phase) => `<span class="cphase ${phase}">${esc(COLLAB_PHASE_LABELS[phase] ?? phase)}</span>`;
@@ -31,7 +35,11 @@ const flags = (c) =>
 export function render(page, ctx) {
   const t = today();
   const admin = isAdmin();
-  const all = state.collaborators ?? [];
+  const everything = state.collaborators ?? [];
+  const years = [...new Set(everything.map(yearOf).filter(Boolean))].sort().reverse();
+  if (v.year && !years.includes(v.year)) v.year = '';
+  // The year filter scopes everything on the page (KPIs, chips, totals) – like one sheet per year.
+  const all = everything.filter((c) => !v.year || yearOf(c) === v.year);
   const totals = collabTotals(all, t);
   const handlers = [...new Set(all.map((c) => c.handled_by).filter(Boolean))].sort();
   const count = (phase) => all.filter((c) => collabPhase(c, t) === phase).length;
@@ -46,7 +54,7 @@ export function render(page, ctx) {
   const lt = collabTotals(list, t);
 
   page.innerHTML = `
-    ${pageHeader('Collaborators', 'Influencers & content creators – deals, trips, content and refunds', admin ? '<button class="btn" data-new>+ Collaborator</button>' : '')}
+    ${pageHeader('Collaborators', 'Influencers & content creators – deals, trips, content and refunds', admin ? '<button class="btn secondary" data-import>Import spreadsheet</button><button class="btn" data-new>+ Collaborator</button>' : '')}
     ${
       totals.overdue
         ? `<button type="button" class="banner warn-banner" data-phase-jump="overdue">⚠ <b>${totals.overdue} trip${totals.overdue === 1 ? ' is' : 's are'} over</b> but the content hasn’t arrived yet – follow up →</button>`
@@ -74,6 +82,7 @@ export function render(page, ctx) {
         v.brand,
         { empty: 'Both brands' }
       )}</select>
+      ${years.length > 1 ? `<select class="input" data-f="year" aria-label="Year">${options(years, v.year, { empty: 'All years' })}</select>` : ''}
       ${handlers.length ? `<select class="input" data-f="handler" aria-label="Handled by">${options(handlers, v.handler, { empty: 'Anyone' })}</select>` : ''}
     </div>
     <div class="chips" style="margin-bottom:14px">${[{ value: '', label: 'All', n: all.length }, ...PHASE_FILTERS.map((p) => ({ value: p, label: COLLAB_PHASE_LABELS[p], n: count(p) }))]
@@ -81,7 +90,7 @@ export function render(page, ctx) {
       .join('')}</div>
     ${
       !all.length
-        ? emptyBox('No collaborations yet', admin ? '<p>Add the first one with “+ Collaborator”.</p>' : '')
+        ? emptyBox('No collaborations yet', admin ? '<p>Import your collaboration spreadsheet, or add one with “+ Collaborator”.</p>' : '')
         : !list.length
           ? emptyBox('Nothing matches these filters')
           : `<section class="card collab-card">
@@ -140,13 +149,14 @@ export function render(page, ctx) {
   );
   page.onclick = (e) => {
     if (e.target.closest('a')) return; // social links open normally
-    const b = e.target.closest('[data-phase], [data-phase-jump], [data-new], [data-open]');
+    const b = e.target.closest('[data-phase], [data-phase-jump], [data-new], [data-open], [data-import]');
     if (!b) return;
     const d = b.dataset;
     if (d.phase !== undefined || d.phaseJump) {
       v.phase = d.phaseJump ?? d.phase;
       rerender();
-    } else if ('new' in d) collabModal({ status: 'request', brand: 'camper' }, ctx.refresh);
+    } else if ('import' in d) importModal(ctx.refresh);
+    else if ('new' in d) collabModal({ status: 'request', brand: 'camper' }, ctx.refresh);
     else if (d.open) collabModal(all.find((c) => c.id === d.open), ctx.refresh);
   };
 }
@@ -245,6 +255,115 @@ function collabModal(c, refresh) {
       refresh();
     } catch (err) {
       toast(err.message, 'error');
+    }
+  });
+}
+
+// ── Import from the collaboration spreadsheet (Excel workbook with one sheet per brand & year, or CSV) ──
+async function readSheets(file) {
+  if (/\.(xlsx|xls|ods)$/i.test(file.name)) {
+    const X = await import(XLSX);
+    const wb = X.read(await file.arrayBuffer());
+    return wb.SheetNames.map((name) => ({ name, rows: X.utils.sheet_to_json(wb.Sheets[name], { defval: '', raw: false }) }));
+  }
+  const { default: Papa } = await import(PAPA);
+  const text = decodeText(new Uint8Array(await file.arrayBuffer()));
+  // "Social Media collaboration 2022(Campers 26).csv" → use the part in brackets as the sheet name
+  const name = (file.name.match(/\(([^)]+)\)/)?.[1] ?? file.name).replace(/\.csv$/i, '');
+  return [{ name, rows: Papa.parse(text, { header: true, skipEmptyLines: 'greedy' }).data }];
+}
+
+function importModal(refresh) {
+  let sheets = []; // { name, rows, brand, year, include }
+  const m = openModal(
+    'Import collaboration spreadsheet',
+    `<div class="stack">
+      <p class="muted">Upload the Excel file – every sheet (e.g. <i>Car Rental 26</i>, <i>Campers 25</i>) is read, the brand and year come from the sheet name.
+      CSV exports work too (one sheet per file). Importing the same sheet again updates the rows instead of duplicating them.</p>
+      <label class="drop"><b data-file-label>Choose the Excel / CSV file(s)</b><span>.xlsx, .xls, .csv – several CSV files at once are fine</span>
+        <input type="file" accept=".xlsx,.xls,.ods,.csv" multiple hidden data-file /></label>
+      <div data-sheets></div>
+      <button class="btn block" data-run disabled>Import</button>
+    </div>`
+  );
+  const box = m.el.querySelector('[data-sheets]');
+  const runBtn = m.el.querySelector('[data-run]');
+
+  const parsed = (sh) => parseCollabSheet(sh.rows, { brand: sh.brand, year: sh.year });
+  const draw = () => {
+    const chosen = sheets.filter((sh) => sh.include && sh.brand && sh.year);
+    const total = chosen.reduce((n, sh) => n + parsed(sh).items.length, 0);
+    box.innerHTML = sheets.length
+      ? `<table class="import-sheets"><thead><tr><th></th><th>Sheet</th><th>Brand</th><th>Year</th><th class="r">Rows</th></tr></thead><tbody>${sheets
+          .map((sh, i) => {
+            const n = parsed(sh).items.length;
+            return `<tr class="${n ? '' : 'muted'}"><td><input type="checkbox" data-inc="${i}" ${sh.include ? 'checked' : ''} ${n ? '' : 'disabled'} /></td>
+              <td>${esc(sh.name)}</td>
+              <td><select class="input sm-input" data-brand="${i}">${options(
+                [
+                  { value: 'car', label: 'Go Car Rentals' },
+                  { value: 'camper', label: 'Go Campers' },
+                ],
+                sh.brand,
+                { empty: '–' }
+              )}</select></td>
+              <td><input class="input sm-input num" type="number" min="2015" max="2100" data-year="${i}" value="${sh.year ?? ''}" style="width:90px" /></td>
+              <td class="r num">${n}</td></tr>`;
+          })
+          .join('')}</tbody></table>
+          ${
+            chosen.length
+              ? `<p class="muted small" style="margin-top:8px">Preview: ${chosen
+                  .flatMap((sh) => parsed(sh).items.slice(0, 2).map((x) => `${esc(x.name)} (${esc(x.vehicle ?? '?')}, ${x.pickup_date ? esc(shortDate(x.pickup_date)) : 'no date'})`))
+                  .slice(0, 6)
+                  .join(' · ')}</p>`
+              : ''
+          }`
+      : '';
+    runBtn.disabled = !total;
+    runBtn.textContent = total ? `Import ${total} collaboration${total === 1 ? '' : 's'}` : 'Import';
+  };
+
+  m.el.querySelector('[data-file]').addEventListener('change', async (e) => {
+    try {
+      sheets = [];
+      for (const file of e.target.files) {
+        for (const sh of await readSheets(file)) {
+          const info = sheetInfo(sh.name);
+          // Only sheets that look like collaboration lists are pre-selected.
+          const looksRight = parseCollabSheet(sh.rows, { brand: info.brand ?? 'car', year: info.year ?? 2026 }).items.length > 0;
+          sheets.push({ ...sh, ...info, include: !!(info.brand && info.year && looksRight) });
+        }
+      }
+      m.el.querySelector('[data-file-label]').textContent = [...e.target.files].map((f) => f.name).join(', ');
+      draw();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+  box.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.inc !== undefined) sheets[t.dataset.inc].include = t.checked;
+    if (t.dataset.brand !== undefined) sheets[t.dataset.brand].brand = t.value || null;
+    if (t.dataset.year !== undefined) sheets[t.dataset.year].year = Number(t.value) || null;
+    draw();
+  });
+  runBtn.addEventListener('click', async () => {
+    const items = sheets.filter((sh) => sh.include && sh.brand && sh.year).flatMap((sh) => parsed(sh).items);
+    runBtn.disabled = true;
+    try {
+      let done = 0;
+      for (let i = 0; i < items.length; i += 200) {
+        runBtn.textContent = `Importing… ${Math.min(i + 200, items.length)} / ${items.length}`;
+        done += (await api('/api/collaborators', { method: 'POST', body: { import: items.slice(i, i + 200) } })).imported;
+      }
+      m.close();
+      toast(`Imported ${done} collaborations`);
+      refresh();
+    } catch (err) {
+      toast(err.message, 'error');
+      runBtn.disabled = false;
+      draw();
     }
   });
 }

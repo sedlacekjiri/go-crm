@@ -806,3 +806,130 @@ export function parseSocials(text) {
       return { platform, url, label };
     });
 }
+
+// ── Collaborators spreadsheet import ───────────────────────────
+// Reads the "Social Media collaboration" sheets (one per brand & year, e.g. "Campers 26").
+
+// CSV bytes → text. Excel / Numbers often save CSV as Windows-1252, which breaks Þ, ð, á…
+export function decodeText(bytes) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^﻿/, '');
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+// "Campers 26" → { brand: 'camper', year: 2026 }; "Car Rental 25" → { brand: 'car', year: 2025 }.
+export function sheetInfo(name) {
+  const brand = /camp/i.test(name) ? 'camper' : /car|rental|bíl|bil/i.test(name) ? 'car' : null;
+  const y = String(name).match(/(?:^|\D)(20\d{2}|\d{2})(?!\d)/g);
+  const last = y ? y.at(-1).replace(/\D/g, '') : null;
+  const year = last ? (last.length === 2 ? 2000 + Number(last) : Number(last)) : null;
+  return { brand, year };
+}
+
+// Excel booleans in English, Czech (PRAVDA/NEPRAVDA) or Icelandic (SATT/ÓSATT).
+export function sheetBool(v) {
+  if (v === true || v === 1) return true;
+  const s = String(v ?? '').trim().toLowerCase();
+  return ['true', 'pravda', 'satt', 'yes', 'já', 'ja', 'x', '✓', '1'].includes(s);
+}
+
+// "€ 1,650.00" / "792" / "€ -" → number or null.
+export function sheetMoney(v) {
+  if (typeof v === 'number') return v;
+  const s = String(v ?? '').replace(/[€\s]/g, '').replace(/,(?=\d{3}\b)/g, '');
+  if (!s || s === '-') return null;
+  const n = Number(s.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+const MONTH_PREFIXES = [
+  ['ja', 1], ['f', 2], ['mar', 3], ['ap', 4], ['mai', 5], ['may', 5], ['jun', 6], ['jul', 7],
+  ['ag', 8], ['au', 8], ['se', 9], ['ok', 10], ['oc', 10], ['no', 11], ['de', 12],
+];
+function monthOfName(word) {
+  const w = word.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return MONTH_PREFIXES.find(([p]) => w.startsWith(p))?.[1] ?? null;
+}
+
+// "26 júní - 4 júlí", "20 sept - 30 Sept", "2 Jan - 10 Jan", "28.7 - 5.8" → { pickup, dropoff } (YYYY-MM-DD).
+// A drop-off month before the pick-up month rolls into the next year (Dec → Jan).
+export function sheetDateRange(text, year) {
+  const parts = [...String(text ?? '').matchAll(/(\d{1,2})\s*(?:\.\s*(\d{1,2})\.?|\.?\s*([A-Za-zÀ-ÿ]+))/g)];
+  if (!parts.length || !year) return { pickup: null, dropoff: null };
+  const toDate = (m, y) => {
+    const d = Number(m[1]);
+    const mon = m[2] ? Number(m[2]) : monthOfName(m[3]);
+    if (!mon || d < 1 || d > 31) return null;
+    return `${y}-${String(mon).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+  const pickup = toDate(parts[0], year);
+  let dropoff = parts[1] ? toDate(parts[1], year) : null;
+  if (pickup && dropoff && dropoff < pickup) dropoff = toDate(parts[1], year + 1);
+  return { pickup, dropoff };
+}
+
+const COLLAB_COLUMNS = [
+  ['name', /^(nafn|name)$/],
+  ['socials', /social/],
+  ['email', /mail/],
+  ['followers', /follower/],
+  ['content', /hvernig|content|efni\s*\?/],
+  ['vehicle', /ltegund|vehicle|car type|bíll|bill/],
+  ['dates', /pick|drop|dates?$/],
+  ['handled_by', /umbo|handled|agent/],
+  ['moodboard', /mood/],
+  ['booking_ref', /booking/],
+  ['comment', /comment|athugasemd/],
+  ['price_eur', /^ver.?$|price/],
+  ['refund_eur', /^refund$/],
+  ['content_delivered', /skila|delivered/],
+  ['in_onedrive', /onedrive/],
+];
+
+// rows: objects keyed by the sheet's header row. Returns { items, skipped }.
+export function parseCollabSheet(rows, { brand, year }) {
+  const items = [];
+  let skipped = 0;
+  const join = (v, sep) => String(v ?? '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(sep);
+  for (const row of rows) {
+    const get = {};
+    for (const [header, value] of Object.entries(row)) {
+      const h = header.trim().toLowerCase();
+      const col = COLLAB_COLUMNS.find(([, re]) => re.test(h))?.[0];
+      if (col && get[col] === undefined) get[col] = value;
+    }
+    const name = join(get.name, ' & ');
+    if (!name) {
+      skipped++;
+      continue; // empty and totals rows
+    }
+    const { pickup, dropoff } = sheetDateRange(get.dates, year);
+    const delivered = sheetBool(get.content_delivered);
+    const followers = sheetMoney(get.followers);
+    items.push({
+      name,
+      email: join(get.email, ', ') || null,
+      socials: join(get.socials, '\n') || null,
+      followers: followers === null ? null : Math.round(followers),
+      content: String(get.content ?? '').trim() || null,
+      brand,
+      vehicle: join(get.vehicle, ' + ') || null,
+      pickup_date: pickup,
+      dropoff_date: dropoff,
+      handled_by: join(get.handled_by, ' / ') || null,
+      booking_ref: join(get.booking_ref, ', ') || null,
+      comment: String(get.comment ?? '').trim() || null,
+      price_eur: sheetMoney(get.price_eur),
+      refund_eur: sheetMoney(get.refund_eur),
+      moodboard: sheetBool(get.moodboard),
+      content_delivered: delivered,
+      in_onedrive: sheetBool(get.in_onedrive),
+      // "Efni skilað & endurgreitt" = content delivered AND refunded → done.
+      status: delivered ? 'done' : 'agreed',
+      import_key: [year, brand, name.toLowerCase(), join(get.booking_ref, ',').toLowerCase(), pickup ?? ''].join('|'),
+    });
+  }
+  return { items, skipped };
+}
