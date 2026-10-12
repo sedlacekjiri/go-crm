@@ -255,6 +255,9 @@ const MIGRATIONS = [
   `ALTER TABLE partners ADD COLUMN chain TEXT`, // hotel chain, e.g. Hilton, Center Hotels
   `ALTER TABLE collaborators ADD COLUMN import_key TEXT`, // spreadsheet row identity, so re-imports update
   `CREATE UNIQUE INDEX IF NOT EXISTS collaborators_import ON collaborators (import_key)`,
+  `ALTER TABLE posts ADD COLUMN published_at TEXT`, // when it actually went live
+  // Posts published before published_at existed: their last change is when they were marked published.
+  `UPDATE posts SET published_at = updated_at WHERE status = 'published' AND published_at IS NULL`,
   // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
   `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
   `ALTER TABLE reviews ADD COLUMN location TEXT`,

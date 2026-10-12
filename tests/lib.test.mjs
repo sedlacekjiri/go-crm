@@ -439,3 +439,24 @@ describe('collaborators', () => {
     ]);
   });
 });
+
+describe('post week stats', () => {
+  it('counts published (by when it went live) and upcoming posts in rolling 7-day windows', async () => {
+    const { postWeekStats } = await import('../public/js/lib.js');
+    const t = '2026-10-12'; // a Monday
+    const s = postWeekStats(
+      [
+        { status: 'published', publish_date: '2026-10-09', published_at: '2026-10-10T12:00:00Z' }, // last week Sat → counts
+        { status: 'published', publish_date: '2026-10-20', published_at: '2026-10-12T09:00:00Z' }, // published early → counts
+        { status: 'published', publish_date: '2026-09-20' }, // old, no published_at
+        { status: 'scheduled', publish_date: '2026-10-15' },
+        { status: 'scheduled', publish_date: '2026-10-25' }, // too far
+        { status: 'in_progress', publish_date: '2026-10-12' },
+        { status: 'scheduled', publish_date: '2026-10-08' }, // date passed, not published
+        { status: 'idea' },
+      ],
+      t
+    );
+    assert.deepEqual(s, { published: 2, scheduled: 1, inProgress: 1, late: 1 });
+  });
+});

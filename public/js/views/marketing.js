@@ -9,6 +9,7 @@ import {
   POST_BRANDS,
   POST_STATUSES,
   marketingDeadlines,
+  postWeekStats,
   postStatusLabel,
   reviewGrowth,
   reviewStats,
@@ -49,8 +50,7 @@ export async function render(page, ctx) {
   v.selected ??= t;
   const admin = isAdmin();
   const posts = state.posts ?? [];
-  const week = weekDays(t);
-  const thisWeek = posts.filter((p) => p.status !== 'idea' && p.publish_date >= week[0] && p.publish_date <= week[6]);
+  const week = postWeekStats(posts, t);
   const next = posts
     .filter((p) => p.status !== 'idea' && p.status !== 'published' && p.publish_date >= t)
     .sort((a, b) => (a.publish_date + (a.publish_time ?? '')).localeCompare(b.publish_date + (b.publish_time ?? '')))[0];
@@ -59,7 +59,7 @@ export async function render(page, ctx) {
   page.innerHTML = `
     ${pageHeader('Marketing', 'Social media content, ideas and Google reviews', admin ? '<button class="btn secondary" data-new-idea>+ Idea</button><button class="btn" data-new-post>+ Post</button>' : '')}
     <div class="kpis">
-      ${kpi('Posts this week', `${thisWeek.filter((p) => p.status === 'published').length}<small class="kpi-of"> / ${thisWeek.length}</small>`, 'published / planned')}
+      ${kpi('Published · last 7 days', week.published, `${week.scheduled} scheduled · ${week.inProgress} in progress for the next 7 days${week.late ? ` · <b class="late">${week.late} past their date</b>` : ''}`)}
       ${kpi('Next post', next ? esc(shortDate(next.publish_date)) : '–', next ? `${esc(next.title)}` : 'nothing scheduled')}
       ${kpi('Ideas in the bank', ideas.length, ideas.length ? 'ready to schedule' : 'add one with + Idea')}
       <div class="kpi" id="ratingKpi"><div class="label">Google rating</div><div class="value">…</div><div class="delta"></div></div>

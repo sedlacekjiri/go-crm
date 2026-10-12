@@ -143,6 +143,21 @@ export const CHECKLIST_TEMPLATES = {
   story: ['Content', 'Stickers / link', 'Post'],
 };
 
+// Posts around today: published in the last 7 days (by when they actually went live), and what is
+// planned for the next 7 days. Uses rolling windows, so Monday mornings don't show an empty week.
+export function postWeekStats(posts, t = today()) {
+  const from = shiftDate(t, -6);
+  const to = shiftDate(t, 6);
+  const wentLive = (p) => (p.published_at ? today(new Date(p.published_at)) : p.publish_date);
+  const upcoming = (p) => p.publish_date && p.publish_date >= t && p.publish_date <= to;
+  return {
+    published: posts.filter((p) => p.status === 'published' && wentLive(p) && wentLive(p) >= from && wentLive(p) <= t).length,
+    scheduled: posts.filter((p) => p.status === 'scheduled' && upcoming(p)).length,
+    inProgress: posts.filter((p) => p.status === 'in_progress' && upcoming(p)).length,
+    late: posts.filter((p) => (p.status === 'scheduled' || p.status === 'in_progress') && p.publish_date && p.publish_date < t).length,
+  };
+}
+
 export const channelLabel = (c) => find(CHANNELS, c)?.label ?? c;
 export const postStatusLabel = (s) => find(POST_STATUSES, s)?.label ?? s;
 

@@ -43,6 +43,9 @@ export async function onRequestPost({ request, env }) {
     row.subtasks = list;
   }
   if (!row.title) return bad('Give it a short title');
+  // Remember when it actually went live (the planned publish_date can be different).
+  if (row.status === 'published' && !row.published_at) row.published_at = now();
+  if (row.status !== 'published') row.published_at = null;
   if (row.status !== 'idea' && !row.publish_date) return bad('Choose a publish date (or keep it as an idea)');
   row.updated_at = now();
 
