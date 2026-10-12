@@ -19,7 +19,7 @@ import {
   today,
   weekDays,
 } from '../lib.js';
-import { api, isAdmin, state, userById } from '../store.js';
+import { api, isAdmin, state, taskPerson } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
 import { taskModal } from './tasks.js';
 import { editorHtml, inlineChecklist, mountEditor, progressPill, toggleInList } from '../checklist.js';
@@ -693,7 +693,7 @@ function deadlinesCard() {
               (x) => `<li><button type="button" class="dl-row" ${x.kind === 'post' ? `data-dl-post="${x.id}"` : `data-dl-task="${x.id}"`}>
                 <span class="dl-kind">${x.kind === 'post' ? 'Post' : 'Task'}</span>
                 <span class="dl-title">${esc(x.title)}${x.kind === 'post' && x.ref.publish_date ? ` <span class="muted small">· goes live ${esc(shortDate(x.ref.publish_date))}</span>` : ''}${x.ref.subtasks?.length ? ` <span class="muted small">· ☑ ${x.ref.subtasks.filter((s) => s.done).length}/${x.ref.subtasks.length}</span>` : ''}</span>
-                <span class="dl-who">${x.kind === 'task' ? assigneeAvatar(userById(x.ref.assignee_id)) : ''}</span>
+                <span class="dl-who">${x.kind === 'task' ? assigneeAvatar(taskPerson(x.ref)) : ''}</span>
                 <span class="muted small nowrap">${esc(shortDate(x.date))}</span>${deadlinePill(x.daysLeft)}
               </button></li>`
             )

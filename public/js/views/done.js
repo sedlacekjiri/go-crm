@@ -1,7 +1,7 @@
 // Tasks → Done: everything you've ticked off, grouped by day, with search and an undo.
 import { avatar, categoryTag, kpi, onSeg, seg } from '../components.js';
 import { groupDone, shiftDate, subtaskProgress, today, weekDays } from '../lib.js';
-import { api, isAdmin, state, userById } from '../store.js';
+import { api, isAdmin, state, taskPerson } from '../store.js';
 import { esc, toast } from '../util.js';
 
 const PERIODS = [
@@ -69,7 +69,7 @@ export async function renderDone(el, category, ctx) {
                   <div class="body">
                     <span class="title">${x.type === 'visit' ? `Visit ${esc(x.partner?.name ?? '(removed partner)')}` : esc(x.title)}</span>
                     <div class="meta">${[
-                      userById(x.assignee_id) ? `<span class="assignee">${avatar(userById(x.assignee_id), 18)}${esc(userById(x.assignee_id).name.split(' ')[0])}</span>` : '',
+                      taskPerson(x) ? `<span class="assignee">${avatar(taskPerson(x), 18)}${esc(taskPerson(x).name.split(' ')[0])}</span>` : '',
                       !category ? categoryTag(x.category) : '',
                       x.lateBy ? `<span class="pill overdue">${x.lateBy} day${x.lateBy === 1 ? '' : 's'} late</span>` : '<span class="pill good">on time</span>',
                       x.partner && x.type !== 'visit' ? `<a href="#/partner/${x.partner.id}">${esc(x.partner.name)}</a>` : x.type === 'visit' && x.partner ? `<a href="#/partner/${x.partner.id}">${esc(x.partner.area ?? 'open')}</a>` : '',

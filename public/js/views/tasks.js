@@ -2,7 +2,7 @@
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
-import { api, can, isAdmin, isTeamAdmin, state, userById } from '../store.js';
+import { api, can, isAdmin, isTeamAdmin, state, taskPerson } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -85,7 +85,7 @@ export function render(page, ctx) {
       ${admin ? `<button type="button" class="tick ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
         <span class="title">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</span>
-        <div class="meta">${[task.assignee_id && userById(task.assignee_id) ? `<span class="assignee" title="Assigned to ${esc(userById(task.assignee_id).name)}">${avatar(userById(task.assignee_id), 18)}${esc(userById(task.assignee_id).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
+        <div class="meta">${[taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
       </div>

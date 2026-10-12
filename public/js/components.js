@@ -83,6 +83,6 @@ export function avatar(u, size = 28) {
 }
 
 // Small round photo of whoever a task is assigned to (nothing when unassigned).
-export const assigneeAvatar = (u, size = 22) => (u ? `<span class="who" title="Assigned to ${esc(u.name)}">${avatar(u, size)}</span>` : '');
+export const assigneeAvatar = (u, size = 22) => (u ? `<span class="who" title="${esc(u.name)}">${avatar(u, size)}</span>` : '');
 
 export const roleLabel = (r) => ({ owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'View only' })[r] ?? r;
