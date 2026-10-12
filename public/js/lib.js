@@ -725,3 +725,84 @@ export function dueCount(date, { tasks, partners }) {
     partners.filter((p) => p.next_follow_up && p.next_follow_up <= date && isOpenStage(p)).length
   );
 }
+
+// ── Collaborators (influencers / content creators) ─────────────
+export const COLLAB_STATUSES = [
+  { value: 'request', label: 'Request', hint: 'They asked / we offered' },
+  { value: 'agreed', label: 'Agreed', hint: 'Deal + booking done' },
+  { value: 'delivered', label: 'Content delivered', hint: 'Got the content, refund to pay' },
+  { value: 'done', label: 'Refunded & done', hint: 'Refund paid, all finished' },
+  { value: 'declined', label: 'Declined', hint: 'Not doing it' },
+];
+export const collabStatusLabel = (s) => find(COLLAB_STATUSES, s)?.label ?? s;
+
+// Where an agreed collaboration is right now, from its rental dates.
+// → 'upcoming' | 'on_trip' | 'overdue' (trip over, no content yet) | the stored status otherwise.
+export function collabPhase(c, t = today()) {
+  if (c.status !== 'agreed') return c.status;
+  if (c.content_delivered) return 'delivered';
+  if (c.dropoff_date && c.dropoff_date < t) return 'overdue';
+  if (c.pickup_date && c.pickup_date <= t) return 'on_trip';
+  return 'upcoming';
+}
+
+export const COLLAB_PHASE_LABELS = {
+  request: 'Request',
+  upcoming: 'Upcoming trip',
+  on_trip: 'On the trip',
+  overdue: 'Content overdue',
+  delivered: 'Content delivered',
+  done: 'Refunded & done',
+  declined: 'Declined',
+};
+
+// The spreadsheet's totals row, plus what still needs action.
+export function collabTotals(list, t = today()) {
+  const active = list.filter((c) => c.status !== 'declined');
+  const sum = (k, l = active) => l.reduce((s, c) => s + (Number(c[k]) || 0), 0);
+  const price = sum('price_eur');
+  const refund = sum('refund_eur');
+  const toRefund = active.filter((c) => c.status === 'delivered');
+  return {
+    count: active.length,
+    followers: sum('followers'),
+    price,
+    refund,
+    net: price - refund,
+    refundPaid: sum('refund_eur', active.filter((c) => c.status === 'done')),
+    refundPending: sum('refund_eur', toRefund),
+    toRefund: toRefund.length,
+    overdue: active.filter((c) => collabPhase(c, t) === 'overdue').length,
+    onTrip: active.filter((c) => collabPhase(c, t) === 'on_trip').length,
+  };
+}
+
+// Social links / handles from free text → [{ platform, url, label }].
+export function parseSocials(text) {
+  if (!text) return [];
+  return String(text)
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && s !== ':' && !/^(instagram|tiktok|youtube|facebook):?$/i.test(s))
+    .map((s) => {
+      const handle = s.startsWith('@') ? s : null;
+      const url = handle ? `https://www.instagram.com/${handle.slice(1)}` : /^https?:\/\//i.test(s) ? s : /\./.test(s) ? `https://${s}` : `https://www.instagram.com/${s}`;
+      const host = (() => {
+        try {
+          return new URL(url).hostname.replace(/^www\./, '');
+        } catch {
+          return '';
+        }
+      })();
+      const platform = /instagram/.test(host) ? 'instagram' : /tiktok/.test(host) ? 'tiktok' : /youtu/.test(host) ? 'youtube' : /facebook/.test(host) ? 'facebook' : 'web';
+      const path = (() => {
+        try {
+          return new URL(url).pathname.split('/').filter(Boolean)[0] ?? '';
+        } catch {
+          return '';
+        }
+      })();
+      const label = platform === 'web' ? host : path ? `@${path.replace(/^@/, '')}` : host;
+      return { platform, url, label };
+    });
+}

@@ -8,7 +8,7 @@ export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
   if (auth instanceof Response) return auth;
   const db = env.DB;
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, goals, sales] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, sales] = await db.batch([
     db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE'),
     db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE'),
     db.prepare('SELECT * FROM activities ORDER BY happened_at DESC'),
@@ -18,6 +18,7 @@ export async function onRequestGet({ request, env }) {
     db.prepare('SELECT * FROM affiliates ORDER BY name COLLATE NOCASE'),
     db.prepare('SELECT * FROM payouts ORDER BY paid_at DESC'),
     db.prepare('SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC'),
+    db.prepare('SELECT * FROM collaborators ORDER BY pickup_date DESC, name COLLATE NOCASE'),
     db.prepare('SELECT * FROM goals'),
     db.prepare('SELECT COUNT(*) AS n, MIN(booking_date) AS first, MAX(booking_date) AS last, MAX(imported_at) AS imported FROM sales'),
   ]);
@@ -31,6 +32,7 @@ export async function onRequestGet({ request, env }) {
     affiliates: affiliates.results,
     payouts: payouts.results,
     notes: notes.results.map((n) => ({ ...n, pinned: !!n.pinned })),
+    collaborators: collaborators.results.map((c) => ({ ...c, moodboard: !!c.moodboard, content_delivered: !!c.content_delivered, in_onedrive: !!c.in_onedrive })),
     goals: goals.results,
     salesInfo: sales.results[0],
   });

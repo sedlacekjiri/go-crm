@@ -13,12 +13,14 @@ import * as pipeline from './views/pipeline.js';
 import * as sales from './views/sales.js';
 import * as tasks from './views/tasks.js';
 import * as marketing from './views/marketing.js';
+import * as collaborators from './views/collaborators.js';
 
 const NAV = [
   { href: '#/', key: 'home', label: 'Home', icon: ICONS.home },
   { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners },
   { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks },
   { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing },
+  { href: '#/collaborators', key: 'collaborators', label: 'Collaborators', icon: ICONS.collab },
   { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline },
   { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales },
   { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals },
@@ -34,6 +36,7 @@ const ROUTES = [
   { re: /^\/partner\/([\w-]+)\/edit$/, nav: 'partners', view: partnerForm },
   { re: /^\/tasks$/, nav: 'tasks', view: tasks },
   { re: /^\/marketing$/, nav: 'marketing', view: marketing },
+  { re: /^\/collaborators$/, nav: 'collaborators', view: collaborators },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },

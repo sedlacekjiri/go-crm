@@ -878,3 +878,36 @@ button.row:hover { background: var(--surface-2); }
 .modal .field > .link-btn { margin-top: 2px; }
 .chain-tag { font-style: normal; font-size: 11px; font-weight: 700; color: var(--car); background: color-mix(in srgb, var(--car) 12%, transparent); border-radius: 6px; padding: 1px 7px; white-space: nowrap; flex-shrink: 0; }
 .chain-tag.sm { font-size: 10px; padding: 0 5px; vertical-align: 1px; }
+
+/* ── Collaborators ─────────────────────── */
+.warn-banner { display: block; width: 100%; text-align: left; background: var(--warn-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); cursor: pointer; font: inherit; }
+.chips button.alert { border-color: color-mix(in srgb, var(--bad) 50%, transparent); color: var(--bad); }
+.chips button.alert[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+.cphase { display: inline-flex; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; white-space: nowrap; background: var(--surface-2); color: var(--text-2); }
+.cphase.upcoming { background: color-mix(in srgb, var(--car) 14%, transparent); color: var(--car); }
+.cphase.on_trip { background: color-mix(in srgb, var(--mkt) 14%, transparent); color: var(--mkt); }
+.cphase.overdue { background: var(--bad-soft); color: var(--bad); }
+.cphase.delivered { background: var(--warn-soft); color: var(--warn); }
+.cphase.done { background: var(--good-soft); color: var(--good); }
+.cphase.declined { text-decoration: line-through; color: var(--text-3); }
+.collab-card { padding: 6px 10px; }
+.collab-table td { vertical-align: top; }
+.collab-table tfoot td { border-top: 2px solid var(--border); padding-top: 10px; }
+.collab-table tr.row-alert td { background: color-mix(in srgb, var(--bad) 5%, transparent); }
+.socs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.soc { font-size: 11px; font-weight: 600; text-decoration: none; border-radius: 6px; padding: 0 6px; background: var(--surface-2); color: var(--text-2); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.soc-instagram { color: var(--ig); } .soc-tiktok { color: var(--text); } .soc-youtube { color: var(--yt); } .soc-facebook { color: var(--fb); }
+.flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.flag { font-size: 11px; color: var(--text-3); border: 1px solid var(--border); border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+.flag.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); background: var(--good-soft); font-weight: 600; }
+.owed { color: var(--accent); }
+.collab-cards { display: none; list-style: none; }
+.collab-cards li { padding: 12px 4px; border-top: 1px solid var(--border); cursor: pointer; display: flex; flex-direction: column; gap: 5px; }
+.collab-cards li:first-child { border-top: 0; }
+.collab-cards li.row-alert { background: color-mix(in srgb, var(--bad) 5%, transparent); }
+.cc-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.cc-money { display: flex; gap: 12px; font-size: 13px; }
+@media (max-width: 760px) {
+  .collab-card .table-wrap { display: none; }
+  .collab-cards { display: block; }
+}

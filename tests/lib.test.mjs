@@ -404,3 +404,38 @@ describe('hotel chains', () => {
     assert.ok(s.includes('Keahotels'));
   });
 });
+
+describe('collaborators', () => {
+  it('works out the phase from the rental dates', async () => {
+    const { collabPhase } = await import('../public/js/lib.js');
+    const c = { status: 'agreed', pickup_date: '2026-10-10', dropoff_date: '2026-10-15', content_delivered: false };
+    assert.equal(collabPhase(c, '2026-10-05'), 'upcoming');
+    assert.equal(collabPhase(c, '2026-10-12'), 'on_trip');
+    assert.equal(collabPhase(c, '2026-10-20'), 'overdue');
+    assert.equal(collabPhase({ ...c, content_delivered: true }, '2026-10-20'), 'delivered');
+    assert.equal(collabPhase({ ...c, status: 'done' }, '2026-10-20'), 'done');
+  });
+  it('totals like the spreadsheet', async () => {
+    const { collabTotals } = await import('../public/js/lib.js');
+    const t = collabTotals(
+      [
+        { status: 'done', followers: 12200, price_eur: 1650, refund_eur: 792 },
+        { status: 'delivered', followers: 2029, price_eur: 1848, refund_eur: 512 },
+        { status: 'agreed', followers: 3399, price_eur: 1743, refund_eur: null, dropoff_date: '2026-10-01' },
+        { status: 'declined', followers: 99999, price_eur: 5000, refund_eur: 100 },
+      ],
+      '2026-10-12'
+    );
+    assert.deepEqual(t, { count: 3, followers: 17628, price: 5241, refund: 1304, net: 3937, refundPaid: 792, refundPending: 512, toRefund: 1, overdue: 1, onTrip: 0 });
+  });
+  it('reads social links and handles', async () => {
+    const { parseSocials } = await import('../public/js/lib.js');
+    const s = parseSocials('https://www.instagram.com/onlythenico/\nhttps://www.tiktok.com/@lily.of.the.va11ey?_r=1 www.itslivwilde.com @bekaburch Instagram:');
+    assert.deepEqual(s.map((x) => [x.platform, x.label]), [
+      ['instagram', '@onlythenico'],
+      ['tiktok', '@lily.of.the.va11ey'],
+      ['web', 'itslivwilde.com'],
+      ['instagram', '@bekaburch'],
+    ]);
+  });
+});
