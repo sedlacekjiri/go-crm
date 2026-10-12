@@ -10,32 +10,128 @@ export function json(data, status = 200) {
 export const bad = (message, status = 400) => json({ error: message }, status);
 
 // Constant-time string compare so the password can't be guessed by timing.
-function safeEqual(a, b) {
+export function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
-// ADMIN_PASSWORD = full access, VIEWER_PASSWORD (optional) = read-only for the owners.
-// Returns { role } or an error Response.
-export async function authorize(request, env, { write = false } = {}) {
+// ── Who is asking ─────────────────────────────────────────────
+// Every request carries "Authorization: Bearer <token>". The token is either
+//   • a session token from /api/auth/login (team members, and the owner), or
+//   • the ADMIN_PASSWORD itself → the owner account (older browsers that stored the password), or
+//   • the VIEWER_PASSWORD → read-only access to everything.
+// Roles: owner (you, everything + team), admin (everything + team), member (edits its sections),
+// viewer (reads its sections). Sections: 'sales', 'marketing' – the menu groups.
+export const SECTIONS = ['sales', 'marketing'];
+export const OWNER_ID = 'owner';
+
+const encoder = new TextEncoder();
+const toHex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+export const sha256 = async (text) => toHex(await crypto.subtle.digest('SHA-256', encoder.encode(text)));
+export const randomToken = () => {
+  const b = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+// PBKDF2 (100 000 rounds – the maximum Cloudflare Workers allow) with a random salt.
+export async function hashPassword(password, salt = toHex(crypto.getRandomValues(new Uint8Array(16)))) {
+  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(salt), iterations: 100000 }, key, 256);
+  return `${salt}:${toHex(bits)}`;
+}
+export async function checkPassword(password, stored) {
+  if (!stored || !password) return false;
+  const [salt] = stored.split(':');
+  return safeEqual(await hashPassword(password, salt), stored);
+}
+
+export const parseSections = (v) => {
+  try {
+    const list = JSON.parse(v ?? '[]');
+    return Array.isArray(list) ? list.filter((s) => SECTIONS.includes(s)) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Public shape of a user (never the password hash).
+export const publicUser = (u) => ({
+  id: u.id,
+  name: u.name,
+  email: u.email,
+  photo: u.photo ?? null,
+  role: u.role,
+  sections: u.role === 'owner' || u.role === 'admin' ? [...SECTIONS] : parseSections(u.sections),
+  active: u.active !== 0,
+});
+
+// The owner account always exists (created on first use) and signs in with ADMIN_PASSWORD.
+export async function ownerUser(db) {
+  let u = await db.prepare('SELECT * FROM users WHERE id = ?').bind(OWNER_ID).first();
+  if (!u) {
+    const t = now();
+    await db.prepare(`INSERT INTO users (id, name, role, sections, active, created_at, updated_at) VALUES (?, 'Admin', 'owner', ?, 1, ?, ?)`).bind(OWNER_ID, JSON.stringify(SECTIONS), t, t).run();
+    u = await db.prepare('SELECT * FROM users WHERE id = ?').bind(OWNER_ID).first();
+  }
+  return u;
+}
+
+async function userFromToken(env, token) {
+  const db = env.DB;
+  if (!token) return null;
+  if (safeEqual(token, env.ADMIN_PASSWORD)) return ownerUser(db);
+  if (env.VIEWER_PASSWORD && safeEqual(token, env.VIEWER_PASSWORD)) {
+    return { id: 'viewer', name: 'Viewer', role: 'viewer', sections: JSON.stringify(SECTIONS), active: 1 };
+  }
+  const row = await db
+    .prepare(`SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`)
+    .bind(await sha256(token), now())
+    .first();
+  return row ?? null;
+}
+
+// Who sees a task: planned visits are Sales; to-dos follow their category – and you always see
+// the ones assigned to you or created by you.
+export function canSeeTask(t, auth) {
+  if (t.type === 'visit') return auth.has('sales');
+  if (auth.has(t.category || 'sales')) return true;
+  return t.assignee_id === auth.user.id || t.created_by === auth.user.id;
+}
+
+// Notes are personal. Notes from before accounts existed belong to the owner.
+export const ownsNote = (n, auth) => (n.created_by ?? OWNER_ID) === auth.user.id;
+
+// Returns an auth context { user, role, sections, canEdit(section), isTeamAdmin } or an error Response.
+//   write:   needs an editing role (not viewer)
+//   section: needs access to that section ('sales' / 'marketing')
+//   team:    needs owner/admin (managing users)
+export async function authorize(request, env, { write = false, section = null, team = false } = {}) {
   if (!env.ADMIN_PASSWORD) {
     return bad('ADMIN_PASSWORD is not set in Cloudflare Pages → Settings → Variables and Secrets.', 503);
   }
   if (!env.DB) return bad('The D1 database is not bound (Cloudflare Pages → Settings → Bindings).', 503);
-  const header = request.headers.get('authorization') || '';
-  const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-  let role = null;
-  if (safeEqual(given, env.ADMIN_PASSWORD)) role = 'admin';
-  else if (env.VIEWER_PASSWORD && safeEqual(given, env.VIEWER_PASSWORD)) role = 'viewer';
-  if (!role) {
-    await new Promise((r) => setTimeout(r, 400)); // slow down guessing
-    return bad('Wrong password', 401);
-  }
-  if (write && role !== 'admin') return bad('View-only access', 403);
   await ensureSchema(env.DB);
-  return { role };
+  const header = request.headers.get('authorization') || '';
+  const user = await userFromToken(env, header.startsWith('Bearer ') ? header.slice(7) : '');
+  if (!user) {
+    await new Promise((r) => setTimeout(r, 400)); // slow down guessing
+    return bad('Please log in again', 401);
+  }
+  const pub = publicUser(user);
+  const ctx = {
+    user: pub,
+    role: pub.role,
+    sections: pub.sections,
+    isTeamAdmin: pub.role === 'owner' || pub.role === 'admin',
+    has: (s) => pub.sections.includes(s),
+    canEdit: (s) => pub.role !== 'viewer' && (!s || pub.sections.includes(s)),
+  };
+  if (section && !ctx.has(section)) return bad('You don’t have access to this section', 403);
+  if (write && !ctx.canEdit(section)) return bad('View-only access', 403);
+  if (team && !ctx.isTeamAdmin) return bad('Only an admin can manage the team', 403);
+  return ctx;
 }
 
 const SCHEMA = [
@@ -236,6 +332,27 @@ const SCHEMA = [
     updated_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS collaborators_dates ON collaborators (pickup_date)`,
+  `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    email TEXT,
+    name TEXT NOT NULL,
+    photo TEXT,
+    role TEXT NOT NULL DEFAULT 'member',
+    sections TEXT,
+    password_hash TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    last_login TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (lower(email)) WHERE email IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id)`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
@@ -258,6 +375,9 @@ const MIGRATIONS = [
   `ALTER TABLE posts ADD COLUMN published_at TEXT`, // when it actually went live
   // Posts published before published_at existed: their last change is when they were marked published.
   `UPDATE posts SET published_at = updated_at WHERE status = 'published' AND published_at IS NULL`,
+  `ALTER TABLE tasks ADD COLUMN assignee_id TEXT`, // who does it (to-dos only)
+  `ALTER TABLE tasks ADD COLUMN created_by TEXT`,
+  `ALTER TABLE notes ADD COLUMN created_by TEXT`, // notes are personal; old ones belong to the owner
   // Reviews from the Business Profile API (complete, newest first) next to the Places API ones.
   `ALTER TABLE reviews ADD COLUMN source TEXT NOT NULL DEFAULT 'places'`,
   `ALTER TABLE reviews ADD COLUMN location TEXT`,

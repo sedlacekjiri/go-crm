@@ -1,8 +1,8 @@
 // Tasks & calendar: hotel visits, to-dos with deadlines, follow-ups and marketing posts – split into
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
-import { categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
+import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
-import { api, isAdmin, state } from '../store.js';
+import { api, can, isAdmin, state, userById } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -13,6 +13,15 @@ import { logActivity } from './partner.js';
 let selected = null;
 let mode = 'week';
 let category = ''; // '' | 'sales' | 'marketing'
+let who = ''; // '' everyone | 'me' | 'none' (unassigned) | a user id
+
+// Whose task is it: the assignee, or – when nobody is assigned – whoever created it (old tasks: the owner).
+const ownerOf = (t) => t.assignee_id ?? t.created_by ?? 'owner';
+const matchesWho = (t) => {
+  if (!who) return true;
+  if (who === 'none') return t.type !== 'visit' && !t.assignee_id;
+  return ownerOf(t) === (who === 'me' ? state.me?.id : who);
+};
 const expanded = new Set(); // tasks whose checklist is open
 let refocus = null; // task id whose "add subtask" input should get focus after a redraw
 
@@ -29,9 +38,17 @@ export function render(page, ctx) {
   selected ??= t;
   const admin = isAdmin();
   const days = mode === 'week' ? weekDays(selected) : monthGrid(monthOf(selected));
-  const counts = dayCounts(days, state, category);
-  const day = agenda(selected, state, category);
-  const late = overdue(t, state, category);
+  // The "who" filter applies to tasks; partner follow-ups are the owner's and follow the same rule.
+  const meId = state.me?.id;
+  const showFollowUps = !who || (who === 'me' ? meId === 'owner' : who === 'owner');
+  const data = { ...state, tasks: state.tasks.filter(matchesWho), partners: state.partners };
+  const counts = dayCounts(days, data, category);
+  const day = agenda(selected, data, category);
+  const late = overdue(t, data, category);
+  if (!showFollowUps) {
+    day.followUps = [];
+    late.followUps = [];
+  }
   const visits = visitStats(state.activities);
   const rangeLabel = mode === 'week' ? `${shortDate(days[0])} – ${shortDate(days[6])}` : monthLabel(monthOf(selected));
 
@@ -68,7 +85,7 @@ export function render(page, ctx) {
       ${admin ? `<button type="button" class="tick ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
         <span class="title">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</span>
-        <div class="meta">${[!category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
+        <div class="meta">${[task.assignee_id && userById(task.assignee_id) ? `<span class="assignee" title="Assigned to ${esc(userById(task.assignee_id).name)}">${avatar(userById(task.assignee_id), 18)}${esc(userById(task.assignee_id).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
       </div>
@@ -122,13 +139,25 @@ export function render(page, ctx) {
 
   const tab = ['notes', 'done'].includes(ctx.query.get('tab')) ? ctx.query.get('tab') : 'plan';
   const top = `
-    ${pageHeader('Tasks', 'Hotel visits, to-dos, deadlines and notes – sales and marketing', admin ? '<button class="btn secondary" data-new-task>+ Task</button><button class="btn" data-plan>Plan visits</button>' : '')}
+    ${pageHeader('Tasks', 'Hotel visits, to-dos, deadlines and notes – sales and marketing', admin ? `<button class="btn secondary" data-new-task>+ Task</button>${can('sales') ? '<button class="btn" data-plan>Plan visits</button>' : ''}` : '')}
     <div class="tasks-top">
       <nav class="tabs tasks-tabs"><a href="#/tasks" class="${tab === 'plan' ? 'active' : ''}">Plan</a><a href="#/tasks?tab=notes" class="${tab === 'notes' ? 'active' : ''}">Notes<span class="count">${state.notes.length}</span></a><a href="#/tasks?tab=done" class="${tab === 'done' ? 'active' : ''}">Done ✓</a></nav>
-      <div class="chips">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES]
+      <div class="chips">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES.filter((c) => can(c.value))]
         .map((c) => `<button type="button" data-cat="${c.value}" aria-pressed="${category === c.value}">${c.value ? `<i class="cdot cat-dot-${c.value}"></i>` : ''}${c.label}</button>`)
         .join('')}</div>
-    </div>`;
+    </div>
+    ${
+      state.users.length > 1 && tab !== 'notes'
+        ? `<div class="chips who-chips">${[
+            { value: '', label: 'Everyone' },
+            { value: 'me', label: 'Mine' },
+            { value: 'none', label: 'Unassigned' },
+            ...state.users.filter((u) => u.id !== meId).map((u) => ({ value: u.id, label: u.name.split(' ')[0], user: u })),
+          ]
+            .map((o) => `<button type="button" data-who="${esc(o.value)}" aria-pressed="${who === o.value}">${o.user ? avatar(o.user, 18) : ''}${esc(o.label)}</button>`)
+            .join('')}</div>`
+        : ''
+    }`;
 
   if (tab === 'notes' || tab === 'done') {
     page.innerHTML = `${top}<div id="tabBody"></div>`;
@@ -137,11 +166,14 @@ export function render(page, ctx) {
     page.onclick = async (e) => {
       if (await handleNoteClick(e, ctx.refresh)) return;
       const b = e.target.closest('button');
-      if (b?.dataset.cat !== undefined) {
+      if (b?.dataset.who !== undefined) {
+        who = b.dataset.who;
+        render(page, ctx);
+      } else if (b?.dataset.cat !== undefined) {
         category = b.dataset.cat;
         render(page, ctx);
       } else if (b && 'plan' in b.dataset) planVisits(selected, ctx.refresh);
-      else if (b && 'newTask' in b.dataset) taskModal({ type: 'todo', category: category || 'sales', due_date: selected }, ctx.refresh);
+      else if (b && 'newTask' in b.dataset) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: selected, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
     };
     return;
   }
@@ -176,10 +208,10 @@ export function render(page, ctx) {
     }
 
     <section class="card">
-      <div class="card-head"><h2>${esc(dayTitle(selected))}</h2>${admin ? `<button class="link-btn" data-plan>+ Plan visits</button>` : ''}</div>
+      <div class="card-head"><h2>${esc(dayTitle(selected))}</h2>${admin && can('sales') ? `<button class="link-btn" data-plan>+ Plan visits</button>` : ''}</div>
       ${
         empty
-          ? `<p class="empty">Nothing planned for this day.${admin ? ' Use “Plan visits” to pick the hotels you’ll walk into.' : ''}</p>`
+          ? `<p class="empty">Nothing planned for this day.${admin && can('sales') ? ' Use “Plan visits” to pick the hotels you’ll walk into.' : ''}</p>`
           : `
         ${day.visits.length ? `<h3 class="sec">Visits <span class="muted">· ${day.visits.filter((v) => v.done).length}/${day.visits.length} done · sorted by area</span></h3><ul class="tasks">${day.visits.map(visitRow).join('')}</ul>` : ''}
         ${day.ongoing.length ? `<h3 class="sec">In progress <span class="muted">· multi-day tasks</span></h3><ul class="tasks">${day.ongoing.map((x) => todoRow(x)).join('')}</ul>` : ''}
@@ -231,6 +263,9 @@ export function render(page, ctx) {
       task.subtasks = list; // instant feedback, then save
       rerender();
       save({ id: task.id, subtasks: list }, null, ctx.refresh);
+    } else if (d.who !== undefined) {
+      who = d.who;
+      rerender();
     } else if (d.cat !== undefined) {
       category = d.cat;
       rerender();
@@ -252,7 +287,7 @@ export function render(page, ctx) {
       selected = t;
       rerender();
     } else if ('plan' in d) planVisits(selected, ctx.refresh);
-    else if ('newTask' in d) taskModal({ type: 'todo', category: category || 'sales', due_date: selected }, ctx.refresh);
+    else if ('newTask' in d) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: selected, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
     else if (d.log) {
       const p = state.partners.find((x) => x.id === d.log);
       logActivity(p, state.contacts.filter((c) => c.partner_id === p.id), ctx.refresh);
@@ -410,7 +445,16 @@ export function taskModal(task, refresh) {
     task.id ? (isVisit ? `Visit – ${partner?.name ?? ''}` : 'Edit task') : 'New task',
     `<form>
       ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, prepare summer campaign…" /></label>
-      <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || 'sales') === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>`}
+      <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.filter((c) => can(c.value) || c.value === task.category).map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || defaultCategory()) === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>
+      ${
+        state.users.length > 1
+          ? `<label class="field"><span>Assign to</span><select class="input" name="assignee_id">${options(
+              state.users.map((u) => ({ value: u.id, label: u.id === state.me?.id ? `${u.name} (me)` : u.name })),
+              task.assignee_id,
+              { empty: 'Nobody – stays with whoever created it' }
+            )}</select></label>`
+          : ''
+      }`}
       <div class="form-grid${isVisit ? '' : ' three'}">
         ${isVisit ? '' : `<label class="field"><span>Start (optional)</span><input class="input" type="date" name="start_date" value="${esc(task.start_date ?? '')}" /><small>For longer tasks</small></label>`}
         <label class="field"><span>${isVisit ? 'Visit on' : 'Deadline / date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>
@@ -435,7 +479,7 @@ export function taskModal(task, refresh) {
   );
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
-  let cat = task.category || 'sales';
+  let cat = task.category || defaultCategory();
   // Checklist editor (kept in memory, saved with the task).
   let subs = (task.subtasks ?? []).map((s) => ({ ...s }));
   const subList = m.el.querySelector('[data-sub-edit]');
@@ -486,7 +530,7 @@ export function taskModal(task, refresh) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(form);
-    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs }) };
+    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, ...('assignee_id' in f ? { assignee_id: f.assignee_id || null } : {}) }) };
     if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
       await api('/api/tasks', { method: 'POST', body });
@@ -510,3 +554,6 @@ export function taskModal(task, refresh) {
   });
 }
 
+
+// New tasks go to Sales if you work in Sales, otherwise Marketing.
+const defaultCategory = () => (can('sales') ? 'sales' : 'marketing');

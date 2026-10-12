@@ -19,7 +19,11 @@ Push to GitHub → Cloudflare deploys it.
 - **Sales**: import of the Caren (booking.caren.is) export, revenue by day / week / month,
   Go Car Rentals vs Go Campers, EUR ⇄ ISK (daily ECB rates), attribution by affiliate code
 - **Goals**: monthly targets with an "on pace" indicator
-- **Two passwords**: `ADMIN_PASSWORD` (you, can edit) and `VIEWER_PASSWORD` (owners, read-only)
+- **Team & access**: everyone has their own login (e-mail + password) and profile photo. The owner signs in
+  with `ADMIN_PASSWORD` (e-mail optional) and manages the team under *Team*: each person gets the **Sales**
+  and/or **Marketing** sections, as Member (edit) or Viewer (read-only). The server only sends data from
+  allowed sections. Tasks can be assigned to people; notes are personal. `VIEWER_PASSWORD` (optional) still
+  gives shared read-only access.
 
 ## Setup on Cloudflare (once, ~10 minutes)
 

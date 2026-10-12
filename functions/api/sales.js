@@ -9,7 +9,7 @@ const COLUMNS =
   'booking_ref, booking_date, pickup_date, return_date, brand, vehicle, rental_days, amount, currency, amount_eur, amount_isk, fx_eur_isk, affiliate_code, status, is_cancelled, customer_country, imported_at';
 
 export async function onRequestGet({ request, env }) {
-  const auth = await authorize(request, env);
+  const auth = await authorize(request, env, { section: 'sales' });
   if (auth instanceof Response) return auth;
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
@@ -26,7 +26,7 @@ export async function onRequestGet({ request, env }) {
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const b = await readJson(request);
   if (!b || !Array.isArray(b.rows)) return bad('Invalid request');

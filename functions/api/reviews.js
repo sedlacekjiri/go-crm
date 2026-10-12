@@ -25,7 +25,7 @@ async function payload(env) {
 }
 
 export async function onRequestGet({ request, env }) {
-  const auth = await authorize(request, env);
+  const auth = await authorize(request, env, { section: 'marketing' });
   if (auth instanceof Response) return auth;
   const key = env.GOOGLE_PLACES_API_KEY;
   if (key) {
@@ -39,7 +39,7 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'marketing' });
   if (auth instanceof Response) return auth;
   const key = env.GOOGLE_PLACES_API_KEY;
   if (!key) return bad('GOOGLE_PLACES_API_KEY is not set in Cloudflare Pages → Settings → Variables and Secrets.', 503);
@@ -77,7 +77,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'marketing' });
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('place_id');
   if (!id) return bad('Missing place_id');

@@ -65,3 +65,21 @@ export const ICONS = {
   sales: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 20V11M11 20V5M16 20v-6M21 20V9"/></svg>',
   goals: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>',
 };
+
+// Profile photo, or initials on a colour picked from the person's id.
+const AVATAR_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#8b5cf6', '#e87ba4', '#c98500', '#4a3aa7'];
+export function avatar(u, size = 28) {
+  if (!u) return '';
+  const style = `width:${size}px;height:${size}px`;
+  if (u.photo) return `<img class="avatar-img" src="${esc(u.photo)}" alt="" style="${style}" />`;
+  const initials = (u.name ?? '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+  const color = AVATAR_COLORS[[...String(u.id)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % AVATAR_COLORS.length];
+  return `<span class="avatar-ini" style="${style};background:${color};font-size:${Math.round(size * 0.4)}px">${esc(initials || '?')}</span>`;
+}
+
+export const roleLabel = (r) => ({ owner: 'Owner', admin: 'Admin', member: 'Member', viewer: 'View only' })[r] ?? r;

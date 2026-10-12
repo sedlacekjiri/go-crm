@@ -1,4 +1,5 @@
-// /api/tasks (admin only) — to-dos and planned visits for the calendar.
+// /api/tasks — to-dos and planned visits for the calendar. Visits are Sales; to-dos follow their
+// category; you can always work on tasks assigned to you. assignee_id = who does it (to-dos only).
 //   POST { id?, type, category, title, partner_id, start_date, due_date, due_time, notes, done }
 //        create / update (only sent fields). due_date is the deadline; start_date (optional)
 //        makes it a multi-day task shown as "in progress" from that day.
@@ -7,7 +8,7 @@
 //   GET  ?done=1&from=YYYY-MM-DD               finished tasks, newest first (history; everyone logged in)
 //   DELETE ?id=…
 
-import { authorize, bad, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, canSeeTask, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const TYPES = ['todo', 'visit'];
 const CATEGORIES = ['sales', 'marketing'];
@@ -25,7 +26,7 @@ export async function onRequestGet({ request, env }) {
   )
     .bind(isDate(from) ? from : null, isDate(from) ? from : null)
     .all();
-  return json(results.map((t) => ({ ...t, done: true, subtasks: parseSubtasks(t.subtasks) })));
+  return json(results.filter((t) => canSeeTask(t, auth)).map((t) => ({ ...t, done: true, subtasks: parseSubtasks(t.subtasks) })));
 }
 
 export async function onRequestPost({ request, env }) {
@@ -36,6 +37,7 @@ export async function onRequestPost({ request, env }) {
   const db = env.DB;
 
   if (b.plan) {
+    if (!auth.canEdit('sales')) return bad('Planning visits is part of Sales', 403);
     const { date, partner_ids: ids } = b.plan;
     if (!isDate(date) || !Array.isArray(ids) || !ids.length) return bad('Choose a day and at least one partner');
     const known = await db
@@ -59,7 +61,8 @@ export async function onRequestPost({ request, env }) {
 
   const existing = b.id ? await db.prepare('SELECT * FROM tasks WHERE id = ?').bind(b.id).first() : null;
   if (b.id && !existing) return bad('Task not found', 404);
-  const row = existing ? { ...existing } : { id: uuid(), type: 'todo', category: 'sales', done: 0, created_at: now() };
+  if (existing && !canSeeTask(existing, auth)) return bad('Task not found', 404);
+  const row = existing ? { ...existing } : { id: uuid(), type: 'todo', category: auth.has('sales') ? 'sales' : 'marketing', done: 0, created_by: auth.user.id, created_at: now() };
   if ('type' in b) row.type = oneOf(b.type, TYPES, 'todo');
   if ('category' in b) row.category = oneOf(b.category, CATEGORIES, 'sales');
   if ('title' in b) row.title = str(b.title, 300);
@@ -68,6 +71,10 @@ export async function onRequestPost({ request, env }) {
   if ('due_date' in b) row.due_date = isDate(b.due_date) ? b.due_date : null;
   if ('due_time' in b) row.due_time = isTime(b.due_time) ? b.due_time : null;
   if ('notes' in b) row.notes = str(b.notes, 2000);
+  if ('assignee_id' in b) {
+    row.assignee_id = str(b.assignee_id, 64);
+    if (row.assignee_id && !(await db.prepare('SELECT 1 FROM users WHERE id = ? AND active = 1').bind(row.assignee_id).first())) return bad('That person isn’t in the team');
+  }
   if ('subtasks' in b) {
     const list = cleanSubtasks(b.subtasks);
     if (list === undefined) return bad('Invalid subtasks');
@@ -78,7 +85,14 @@ export async function onRequestPost({ request, env }) {
     row.done_at = b.done ? existing?.done_at || now() : null;
   }
   if (!row.due_date) return bad('Choose a date');
-  if (row.type === 'visit') row.category = 'sales';
+  if (row.type === 'visit') {
+    row.category = 'sales';
+    row.assignee_id = null; // visits are yours
+  }
+  // You can only file tasks under sections you work in (unless it's assigned to you to do).
+  if (!auth.canEdit(row.category) && !(existing && existing.assignee_id === auth.user.id && existing.category === row.category)) {
+    return bad(`You can’t add or move tasks to ${row.category === 'sales' ? 'Sales' : 'Marketing'}`, 403);
+  }
   if (row.start_date && row.start_date >= row.due_date) row.start_date = null; // a one-day task
   if (row.type === 'visit' && !row.partner_id) return bad('A visit needs a partner');
   if (row.type === 'todo' && !row.title) return bad('Write what to do');
@@ -87,7 +101,7 @@ export async function onRequestPost({ request, env }) {
     if (!p) return bad('Partner not found', 404);
   }
 
-  const cols = ['id', 'type', 'category', 'title', 'partner_id', 'start_date', 'due_date', 'due_time', 'notes', 'subtasks', 'done', 'done_at', 'created_at'];
+  const cols = ['id', 'type', 'category', 'title', 'partner_id', 'start_date', 'due_date', 'due_time', 'notes', 'subtasks', 'assignee_id', 'created_by', 'done', 'done_at', 'created_at'];
   await db
     .prepare(
       `INSERT INTO tasks (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})
@@ -103,6 +117,9 @@ export async function onRequestDelete({ request, env }) {
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return bad('Missing id');
+  const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
+  if (!task || !canSeeTask(task, auth)) return bad('Task not found', 404);
+  if (!auth.canEdit(task.category || 'sales') && task.created_by !== auth.user.id) return bad('You can’t delete this task', 403);
   await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run();
   return json({ ok: true });
 }

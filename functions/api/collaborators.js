@@ -42,7 +42,7 @@ const FIELDS = {
 const out = (r) => ({ ...r, moodboard: !!r.moodboard, content_delivered: !!r.content_delivered, in_onedrive: !!r.in_onedrive });
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'marketing' });
   if (auth instanceof Response) return auth;
   const b = await readJson(request);
   if (!b || typeof b !== 'object') return bad('Invalid request');
@@ -101,7 +101,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'marketing' });
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return bad('Missing id');

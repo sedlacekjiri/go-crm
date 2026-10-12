@@ -28,7 +28,7 @@ const FIELDS = {
 };
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const b = await readJson(request);
   if (!b || typeof b !== 'object') return bad('Invalid request');
@@ -77,7 +77,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const url = new URL(request.url);
   const id = url.searchParams.get('id');

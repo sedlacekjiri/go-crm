@@ -1,10 +1,12 @@
 // Home: the overview for you (follow-ups) and the owners (results).
 import { revenueChart } from '../chart.js';
-import { followUpPill, kpi, stageBadge } from '../components.js';
+import { avatar, followUpPill, kpi, stageBadge } from '../components.js';
 import {
   activityLabel,
   actuals,
   agenda,
+  marketingDeadlines,
+  postWeekStats,
   overdue,
   GOAL_METRICS,
   isPartnerSale,
@@ -18,7 +20,7 @@ import {
   today,
   totals,
 } from '../lib.js';
-import { currency, isAdmin, loadSales, state } from '../store.js';
+import { can, currency, isAdmin, loadSales, state } from '../store.js';
 import { dateTime, esc, money, monthLabel, num, pct, shortDate } from '../util.js';
 
 export async function render(page, { isCurrent }) {
@@ -27,6 +29,8 @@ export async function render(page, { isCurrent }) {
   const chartFrom = shiftDate(t, -7 * 12 + 1);
   const from = `${month}-01` < chartFrom ? `${month}-01` : chartFrom;
   const cur = currency.value;
+
+  if (!can('sales')) return renderLite(page);
 
   page.innerHTML = '<div class="loading">Loading…</div>';
   const sales = await loadSales(from, t);
@@ -150,4 +154,52 @@ export async function render(page, { isCurrent }) {
 
   revenueChart(page.querySelector('#dashChart'), revenueSeries(partnerSales, chartFrom, t, 'week', cur), { currency: cur, granularity: 'week', height: 230 });
   page.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => (location.hash = tr.dataset.href)));
+}
+
+// Home for people without Sales access: their day, their open tasks and – with Marketing – how content is going.
+function renderLite(page) {
+  const t = today();
+  const me = state.me;
+  const mine = state.tasks.filter((x) => !x.done && x.type !== 'visit' && (x.assignee_id ?? x.created_by) === me?.id);
+  const day = agenda(t, state);
+  const late = overdue(t, state);
+  const week = can('marketing') ? postWeekStats(state.posts ?? [], t) : null;
+  const deadlines = can('marketing') ? marketingDeadlines(state, t, 14) : [];
+  const items = [
+    ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time].filter(Boolean).join(' · '), done: x.done })),
+    ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, done: false })),
+    ...day.posts.map((x) => ({ title: x.title, sub: `Post · ${x.channels.join(', ')}`, done: x.status === 'published' })),
+    ...day.readyBy.map((x) => ({ title: x.title, sub: 'Content deadline', done: false })),
+  ];
+  const lateCount = late.tasks.length + late.posts.length;
+  page.innerHTML = `
+    <header class="top"><div class="hello">${avatar(me, 44)}<div><h1 class="page-title">Góðan daginn${me?.name ? `, ${esc(me.name.split(' ')[0])}` : ''}</h1>
+      <p class="page-sub">${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div></header>
+    <div class="kpis">
+      ${kpi('My open tasks', mine.length, lateCount ? `<b class="late">${lateCount} overdue</b>` : 'nothing overdue')}
+      ${kpi('Today', items.filter((x) => !x.done).length, 'to do today')}
+      ${week ? kpi('Published · last 7 days', week.published, `${week.scheduled} scheduled next 7 days`) : ''}
+      ${can('marketing') ? kpi('Deadlines · 14 days', deadlines.length, deadlines.some((d) => d.daysLeft < 0) ? '<b class="late">some are late</b>' : 'content & marketing tasks') : ''}
+    </div>
+    <div class="grid">
+      <section class="card"><div class="card-head"><h2>Today</h2><a class="link-btn" href="#/tasks">Tasks →</a></div>
+        ${
+          items.length
+            ? `<div class="list">${items.map((x) => `<a class="row" href="#/tasks"><span class="name">${x.done ? '<span class="muted">✓ </span>' : ''}<b>${esc(x.title)}</b><br><span class="muted small">${esc(x.sub)}</span></span></a>`).join('')}</div>`
+            : '<p class="empty">Nothing for today.</p>'
+        }
+        ${lateCount ? `<a class="pill overdue" style="margin-top:10px" href="#/tasks">⚠ ${lateCount} overdue</a>` : ''}
+      </section>
+      <section class="card"><div class="card-head"><h2>My open tasks</h2></div>
+        ${
+          mine.length
+            ? `<div class="list">${mine
+                .sort((a, b) => a.due_date.localeCompare(b.due_date))
+                .slice(0, 10)
+                .map((x) => `<a class="row" href="#/tasks"><span class="name"><b>${esc(x.title)}</b><br><span class="muted small">${x.category === 'marketing' ? 'Marketing' : 'Sales'} · ${esc(shortDate(x.due_date))}</span></span>${x.due_date < t ? '<span class="pill overdue">late</span>' : ''}</a>`)
+                .join('')}</div>`
+            : '<p class="empty">No open tasks assigned to you.</p>'
+        }
+      </section>
+    </div>`;
 }

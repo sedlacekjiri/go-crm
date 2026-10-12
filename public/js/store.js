@@ -1,6 +1,7 @@
-// Password, API calls, loaded data and the EUR/ISK setting.
+// Session token, API calls, loaded data and the EUR/ISK setting.
 import { storage } from './util.js';
 
+// Holds a session token (or, from before accounts existed, the admin password itself).
 const TOKEN_KEY = 'go-crm-password';
 
 let token = null;
@@ -46,6 +47,9 @@ export async function api(path, { method = 'GET', body } = {}) {
 // ── Loaded data ────────────────────────────────────────────────
 export const state = {
   role: null,
+  me: null,
+  users: [],
+  sections: [],
   partners: [],
   contacts: [],
   activities: [],
@@ -59,7 +63,25 @@ export const state = {
   salesInfo: null,
 };
 
-export const isAdmin = () => state.role === 'admin';
+// Can the signed-in person edit? (Everyone except viewers; sections they can't see aren't shown at all.)
+export const isAdmin = () => !!state.role && state.role !== 'viewer';
+export const can = (section) => (state.sections ?? []).includes(section);
+export const isTeamAdmin = () => state.role === 'owner' || state.role === 'admin';
+export const userById = (id) => (state.users ?? []).find((u) => u.id === id) ?? null;
+
+export async function login(email, password, remember) {
+  token = null;
+  const data = await api('/api/auth', { method: 'POST', body: { action: 'login', email, password } });
+  setToken(data.token, remember);
+  return data.user;
+}
+
+export async function logoutSession() {
+  try {
+    await api('/api/auth', { method: 'POST', body: { action: 'logout' } });
+  } catch {}
+  setToken(null);
+}
 
 export async function loadData() {
   const data = await api('/api/data');

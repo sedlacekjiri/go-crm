@@ -915,3 +915,26 @@ button.row:hover { background: var(--surface-2); }
 .nav-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; padding: 16px 12px 6px; }
 .sheet-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 12px 4px; }
 .sheet-label:first-child { padding-top: 0; }
+
+/* ── People ────────────────────────────── */
+.avatar-img, .avatar-ini { border-radius: 50%; flex-shrink: 0; object-fit: cover; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; vertical-align: middle; }
+.me-chip { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 8px 10px; margin-bottom: 4px; border-radius: 12px; text-align: left; color: var(--text); }
+.me-chip:hover { background: var(--surface-2); }
+.me-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.me-text b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-text small { font-size: 11px; color: var(--text-3); }
+.sheet-me { display: flex; align-items: center; gap: 12px; padding: 0 12px 12px; }
+.sheet-me:empty { display: none; }
+.profile-photo { display: flex; align-items: center; gap: 16px; }
+.assignee { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--text-2); }
+.who-chips { margin: -4px 0 12px; }
+.who-chips button { display: inline-flex; align-items: center; gap: 5px; }
+.team-list { list-style: none; display: flex; flex-direction: column; }
+.team-list li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.team-list li:first-child { border-top: 0; }
+.team-list li.inactive { opacity: 0.55; }
+.team-list .body { flex: 1; min-width: 180px; }
+.team-list .sections { display: flex; gap: 4px; }
+.role-pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px; background: var(--surface-2); color: var(--text-2); }
+.role-pill.owner, .role-pill.admin { background: var(--accent-soft); color: var(--accent); }
+.hello { display: flex; align-items: center; gap: 14px; }

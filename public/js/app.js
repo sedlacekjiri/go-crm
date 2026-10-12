@@ -1,7 +1,7 @@
 // Entry point: login, navigation (sidebar / phone tab bar), hash router.
 import { dueCount, today } from './lib.js';
-import { ICONS, seg } from './components.js';
-import { currency, hasToken, isAdmin, loadData, loadTodayRate, setToken, state } from './store.js';
+import { avatar, ICONS, roleLabel, seg } from './components.js';
+import { can, currency, hasToken, isAdmin, isTeamAdmin, loadData, loadTodayRate, login, logoutSession, setToken, state } from './store.js';
 import { $, esc, openModal, storage, toast } from './util.js';
 import * as dashboard from './views/dashboard.js';
 import * as goals from './views/goals.js';
@@ -12,11 +12,12 @@ import * as partners from './views/partners.js';
 import * as pipeline from './views/pipeline.js';
 import * as sales from './views/sales.js';
 import * as tasks from './views/tasks.js';
+import * as team from './views/team.js';
 import * as marketing from './views/marketing.js';
 import * as collaborators from './views/collaborators.js';
 
 // Menu in groups: general on top, then Sales (just for you) and Marketing.
-// `group` is also the unit for sharing sections with colleagues later.
+// `group` is also what colleagues get access to (Team → sections).
 const NAV = [
   { href: '#/', key: 'home', label: 'Home', icon: ICONS.home, group: '' },
   { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks, group: '' },
@@ -29,6 +30,9 @@ const NAV = [
 ];
 
 // NAV items with a heading before the first item of each group.
+const GROUP_SECTION = { Sales: 'sales', Marketing: 'marketing' };
+const allowedNav = () => NAV.filter((n) => !n.group || can(GROUP_SECTION[n.group]));
+
 const grouped = (items, link, label) => {
   let last = null;
   return items
@@ -49,6 +53,7 @@ const ROUTES = [
   { re: /^\/partner\/([\w-]+)$/, nav: 'partners', view: partner },
   { re: /^\/partner\/([\w-]+)\/edit$/, nav: 'partners', view: partnerForm },
   { re: /^\/tasks$/, nav: 'tasks', view: tasks },
+  { re: /^\/team$/, nav: 'team', view: team },
   { re: /^\/marketing$/, nav: 'marketing', view: marketing },
   { re: /^\/collaborators$/, nav: 'collaborators', view: collaborators },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
@@ -73,7 +78,10 @@ export const navigate = (hash) => {
 let renderId = 0;
 async function render() {
   const { path, query } = parseHash();
-  const route = ROUTES.find((r) => r.re.test(path)) || ROUTES[0];
+  let route = ROUTES.find((r) => r.re.test(path)) || ROUTES[0];
+  // Sections you don't have access to aren't reachable by URL either.
+  const navItem = NAV.find((n) => n.key === route.nav);
+  if (navItem?.group && !can(GROUP_SECTION[navItem.group])) route = ROUTES[0];
   const params = path.match(route.re)?.slice(1) ?? [];
   highlightNav(route.nav);
   const id = ++renderId;
@@ -108,13 +116,23 @@ function updateBadges() {
 function buildNav() {
   const item = (n) =>
     `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
-  $('#nav').innerHTML = grouped(NAV, item, (g) => `<div class="nav-label">${g}</div>`);
-  // Phones: the four most used sections as tabs, the rest under "More".
+  const items = allowedNav();
+  $('#nav').innerHTML = grouped(items, item, (g) => `<div class="nav-label">${g}</div>`);
+  // Phones: the most used sections as tabs, the rest under "More".
   $('#tabbar').innerHTML =
-    NAV.filter((n) => TABS.includes(n.key)).map(item).join('') +
+    items.filter((n) => TABS.includes(n.key)).map(item).join('') +
     `<a href="#" data-action="more" data-nav="more">${ICONS.more}<span>More</span></a>`;
-  $('#roleNote').textContent = isAdmin() ? 'Admin' : 'View only';
+  renderMe();
+  document.querySelectorAll('[data-team-only]').forEach((el) => (el.hidden = !isTeamAdmin()));
   renderCurrencySwitch();
+}
+
+// Photo + name + role at the bottom of the sidebar.
+function renderMe() {
+  const me = state.me;
+  $('#meChip').innerHTML = me
+    ? `${avatar(me, 34)}<span class="me-text"><b>${esc(me.name)}</b><small>${esc(roleLabel(me.role))}</small></span>`
+    : '';
 }
 
 function renderCurrencySwitch() {
@@ -141,13 +159,16 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     const m = openModal(
       'More',
-      `<nav class="sheet-nav">${grouped(
-        NAV.filter((n) => !TABS.includes(n.key)),
+      `<div class="sheet-me">${state.me ? `${avatar(state.me, 40)}<span class="me-text"><b>${esc(state.me.name)}</b><small>${esc(roleLabel(state.me.role))}</small></span>` : ''}</div>
+       <nav class="sheet-nav">${grouped(
+        allowedNav().filter((n) => !TABS.includes(n.key)),
         (n) => `<a href="${n.href}">${n.icon}<span>${n.label}</span></a>`,
         (g) => `<div class="sheet-label">${g}</div>`
       )}</nav>
        <div class="stack" style="margin-top:12px">
          <p class="muted small">${isAdmin() ? 'Admin – full access' : 'View only'}${currency.rate ? ` · 1 € = ${currency.rate.toFixed(1)} kr` : ''}</p>
+         <button class="btn secondary block" data-m="profile">Edit profile</button>
+         ${isTeamAdmin() ? '<button class="btn secondary block" data-m="team">Team</button>' : ''}
          <button class="btn secondary block" data-m="theme">Switch light / dark</button>
          <button class="btn secondary block" data-m="logout">Log out</button>
        </div>`
@@ -158,10 +179,14 @@ document.addEventListener('click', (e) => {
       if (!b) return;
       m.close();
       if (b.dataset.m === 'theme') toggleTheme();
+      else if (b.dataset.m === 'profile') team.profileModal(() => (buildNav(), render()));
+      else if (b.dataset.m === 'team') navigate('#/team');
       else logout();
     });
     return;
   }
+  if (action === 'profile') return team.profileModal(() => (buildNav(), render()));
+  if (action === 'team') return navigate('#/team');
   if (action === 'theme') toggleTheme();
   if (action === 'logout') logout();
   if (action === 'menu') {
@@ -192,8 +217,9 @@ function toggleTheme() {
   render(); // charts read colors from CSS
 }
 
-function logout() {
-  setToken(null);
+async function logout() {
+  await logoutSession();
+  history.replaceState(null, '', '#/'); // the next person starts on Home
   showLogin();
 }
 
@@ -222,9 +248,13 @@ async function start(fromLogin = false) {
 
 $('#loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  setToken($('#password').value, $('#remember').checked);
   $('#loginError').textContent = '';
-  start(true);
+  try {
+    await login($('#email').value.trim(), $('#password').value, $('#remember').checked);
+    start(true);
+  } catch (err) {
+    $('#loginError').textContent = err.message;
+  }
 });
 
 window.addEventListener('go-crm:logout', () => {

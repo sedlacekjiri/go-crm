@@ -30,6 +30,7 @@
       <div class="logo"><img src="/logo.png" alt="Go" /><span>CRM · Reykjavík</span></div>
       <h1>Partner CRM</h1>
       <p>Go Car Rentals &amp; Go Campers · Reykjavík office</p>
+      <input class="input" type="email" id="email" placeholder="E-mail (admin: optional)" autocomplete="username" />
       <input class="input" type="password" id="password" placeholder="Password" autocomplete="current-password" required />
       <label class="check"><input type="checkbox" id="remember" checked /> Remember on this device</label>
       <button class="btn" type="submit">Log in</button>
@@ -43,8 +44,10 @@
       <a class="logo" href="#/"><img src="/logo.png" alt="Go" /><span>CRM · Reykjavík</span></a>
       <nav class="nav" id="nav" aria-label="Sections"></nav>
       <div class="sidebar-foot">
-        <div class="side-note" id="roleNote"></div>
+        <button class="me-chip" type="button" data-action="profile" id="meChip"></button>
+        <button class="side-btn" type="button" data-action="profile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="txt">Edit profile</span></button>
         <button class="side-btn" type="button" data-action="theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><span class="txt">Theme</span></button>
+        <button class="side-btn" type="button" data-action="team" data-team-only hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/></svg><span class="txt">Team</span></button>
         <button class="side-btn" type="button" data-action="logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="txt">Log out</span></button>
       </div>
     </aside>

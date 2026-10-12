@@ -6,7 +6,7 @@ import { authorize, bad, json, readJson } from '../_lib/db.js';
 const METRICS = ['visits', 'hotels_visited', 'new_partners', 'bookings', 'revenue_eur'];
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const b = await readJson(request);
   if (!b || !/^\d{4}-\d{2}$/.test(b.month || '') || typeof b.targets !== 'object') return bad('Invalid request');

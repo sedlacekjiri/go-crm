@@ -9,7 +9,7 @@ import { savePartner } from '../_lib/partners.js';
 const TYPES = ['visit', 'meeting', 'call', 'email', 'note'];
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const b = await readJson(request);
   if (!b) return bad('Invalid request');
@@ -58,7 +58,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return bad('Missing id');

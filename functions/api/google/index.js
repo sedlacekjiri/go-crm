@@ -12,13 +12,13 @@ import { authorize, bad, json, now, oneOf, readJson, str } from '../../_lib/db.j
 import { accessToken, authUrl, deleteReply, forgetToken, isConfigured, listLocations, postReply, saveLocations, signState, status, syncAll } from '../../_lib/gbp.js';
 
 export async function onRequestGet({ request, env }) {
-  const auth = await authorize(request, env);
+  const auth = await authorize(request, env, { section: 'marketing' });
   if (auth instanceof Response) return auth;
   return json(await status(env));
 }
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'marketing' });
   if (auth instanceof Response) return auth;
   if (!isConfigured(env)) return bad('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not set in Cloudflare Pages → Settings → Variables and Secrets.', 503);
   const b = await readJson(request);

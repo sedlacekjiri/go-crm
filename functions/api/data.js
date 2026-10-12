@@ -1,39 +1,51 @@
-// GET /api/data — everything the CRM needs except sales and reviews: partners, contacts, activity log,
-// tasks, marketing posts, goals.
+// GET /api/data — everything the CRM page needs except sales rows and reviews, limited to what the
+// signed-in person may see: Sales data only with Sales access, Marketing data only with Marketing
+// access, tasks by category (or assigned to them), and only their own notes. Plus the team list
+// (for "Assign to") and who they are.
 // The data set is small (hundreds of partners), so the page loads it all at once.
 
-import { authorize, json, parseSubtasks } from '../_lib/db.js';
+import { authorize, canSeeTask, json, ownsNote, parseSubtasks, publicUser } from '../_lib/db.js';
 
 export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
   if (auth instanceof Response) return auth;
   const db = env.DB;
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, sales] = await db.batch([
-    db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE'),
-    db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE'),
-    db.prepare('SELECT * FROM activities ORDER BY happened_at DESC'),
+  const sales = auth.has('sales');
+  const marketing = auth.has('marketing');
+  const none = db.prepare('SELECT 1 WHERE 0');
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users] = await db.batch([
+    sales ? db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE') : none,
+    sales ? db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE') : none,
+    sales ? db.prepare('SELECT * FROM activities ORDER BY happened_at DESC') : none,
     // Open tasks plus what was done in the last 120 days (for the calendar history).
     db.prepare("SELECT * FROM tasks WHERE done = 0 OR due_date >= date('now', '-120 days') ORDER BY due_date, due_time"),
-    db.prepare('SELECT * FROM posts ORDER BY publish_date, publish_time'),
-    db.prepare('SELECT * FROM affiliates ORDER BY name COLLATE NOCASE'),
-    db.prepare('SELECT * FROM payouts ORDER BY paid_at DESC'),
+    marketing ? db.prepare('SELECT * FROM posts ORDER BY publish_date, publish_time') : none,
+    sales ? db.prepare('SELECT * FROM affiliates ORDER BY name COLLATE NOCASE') : none,
+    sales ? db.prepare('SELECT * FROM payouts ORDER BY paid_at DESC') : none,
     db.prepare('SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC'),
-    db.prepare('SELECT * FROM collaborators ORDER BY pickup_date DESC, name COLLATE NOCASE'),
-    db.prepare('SELECT * FROM goals'),
-    db.prepare('SELECT COUNT(*) AS n, MIN(booking_date) AS first, MAX(booking_date) AS last, MAX(imported_at) AS imported FROM sales'),
+    marketing ? db.prepare('SELECT * FROM collaborators ORDER BY pickup_date DESC, name COLLATE NOCASE') : none,
+    sales ? db.prepare('SELECT * FROM goals') : none,
+    sales ? db.prepare('SELECT COUNT(*) AS n, MIN(booking_date) AS first, MAX(booking_date) AS last, MAX(imported_at) AS imported FROM sales') : none,
+    db.prepare(`SELECT * FROM users WHERE active = 1 ORDER BY role = 'owner' DESC, name COLLATE NOCASE`),
   ]);
   return json({
+    me: auth.user,
     role: auth.role,
+    sections: auth.sections,
+    users: users.results.map((u) => {
+      const p = publicUser(u);
+      return { id: p.id, name: p.name, photo: p.photo, role: p.role, sections: p.sections };
+    }),
     partners: partners.results,
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
     activities: activities.results,
-    tasks: tasks.results.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
+    tasks: tasks.results.filter((t) => canSeeTask(t, auth)).map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [], subtasks: parseSubtasks(p.subtasks) })),
     affiliates: affiliates.results,
     payouts: payouts.results,
-    notes: notes.results.map((n) => ({ ...n, pinned: !!n.pinned })),
+    notes: notes.results.filter((n) => ownsNote(n, auth)).map((n) => ({ ...n, pinned: !!n.pinned })),
     collaborators: collaborators.results.map((c) => ({ ...c, moodboard: !!c.moodboard, content_delivered: !!c.content_delivered, in_onedrive: !!c.in_onedrive })),
     goals: goals.results,
-    salesInfo: sales.results[0],
+    salesInfo: salesInfo.results[0] ?? null,
   });
 }

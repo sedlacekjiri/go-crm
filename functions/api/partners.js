@@ -7,7 +7,7 @@ import { authorize, bad, json, now, oneOf, readJson, str, uuid } from '../_lib/d
 import { savePartner, TYPES } from '../_lib/partners.js';
 
 export async function onRequestPost({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const body = await readJson(request);
   if (!body || typeof body !== 'object') return bad('Invalid request');
@@ -38,7 +38,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 export async function onRequestDelete({ request, env }) {
-  const auth = await authorize(request, env, { write: true });
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return bad('Missing id');
