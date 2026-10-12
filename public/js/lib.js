@@ -1012,9 +1012,15 @@ export function isoWeek(date) {
 const wentLive = (p) => (p.published_at ? today(new Date(p.published_at)) : p.publish_date);
 const inRange = (d, from, to) => !!d && d >= from && d <= to;
 
-// Everything for one week's marketing meeting, from data the CRM already has.
+// Which week the report opens on: early in the week (Mon–Tue) the meeting is about last week.
+export const defaultReportWeek = (t = today()) => {
+  const wd = (new Date(`${t}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return wd <= 1 ? shiftDate(mondayOf(t), -7) : mondayOf(t);
+};
+
+// Everything for one week's marketing meeting (shown to the owners), from data the CRM already has.
 // `reviews` is the /api/reviews payload (or null while it loads / without access).
-export function weeklyReport({ posts = [], tasks = [], collaborators = [], social = [] }, reviews, weekStart, t = today()) {
+export function weeklyReport({ posts = [], tasks = [], collaborators = [], social = [], partners = [] }, reviews, weekStart, t = today()) {
   const start = mondayOf(weekStart);
   const end = shiftDate(start, 6);
   const prevStart = shiftDate(start, -7);
@@ -1022,7 +1028,7 @@ export function weeklyReport({ posts = [], tasks = [], collaborators = [], socia
   const nextStart = shiftDate(start, 7);
   const nextEnd = shiftDate(start, 13);
   const until = end < t ? end : t; // the current week only counts up to today
-  const isMarketing = (x) => x.type !== 'visit' && (x.category || 'sales') === 'marketing';
+  const isTodo = (x) => x.type !== 'visit';
 
   // Followers: state at the end of the week, growth against the end of the week before.
   const nowS = socialSummary(social, until);
@@ -1045,19 +1051,24 @@ export function weeklyReport({ posts = [], tasks = [], collaborators = [], socia
   const count = (list, key) => list.reduce((m, p) => ((m[key(p)] = (m[key(p)] ?? 0) + 1), m), {});
   const byChannel = {};
   for (const p of published) for (const c of p.channels ?? []) byChannel[c] = (byChannel[c] ?? 0) + 1;
-  const missed = posts
-    .filter((p) => (p.status === 'scheduled' || p.status === 'in_progress') && p.publish_date && p.publish_date <= end && p.publish_date < t)
-    .sort((a, b) => a.publish_date.localeCompare(b.publish_date));
   const nextPosts = posts
     .filter((p) => p.status !== 'idea' && p.status !== 'published' && inRange(p.publish_date, nextStart, nextEnd))
     .sort((a, b) => (a.publish_date + (a.publish_time ?? '')).localeCompare(b.publish_date + (b.publish_time ?? '')));
 
-  // Tasks
-  const doneOn = (x) => (x.done_at ? x.done_at.slice(0, 10) : x.due_date);
-  const doneTasks = tasks.filter((x) => isMarketing(x) && x.done && inRange(doneOn(x), start, end)).sort((a, b) => doneOn(a).localeCompare(doneOn(b)));
-  const prevDone = tasks.filter((x) => isMarketing(x) && x.done && inRange(doneOn(x), prevStart, prevEnd)).length;
-  const overdueTasks = tasks.filter((x) => isMarketing(x) && !x.done && x.due_date < t).sort((a, b) => a.due_date.localeCompare(b.due_date));
-  const nextTasks = tasks.filter((x) => isMarketing(x) && !x.done && inRange(x.due_date, nextStart, nextEnd)).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  // Tasks: every to-do the reader can see (marketing, plus sales ones for people with Sales access),
+  // counted in the week it was ticked off.
+  const doneOn = (x) => (x.done_at ? today(new Date(x.done_at)) : x.due_date);
+  const doneTasks = tasks.filter((x) => isTodo(x) && x.done && inRange(doneOn(x), start, end)).sort((a, b) => doneOn(a).localeCompare(doneOn(b)));
+  const prevDone = tasks.filter((x) => isTodo(x) && x.done && inRange(doneOn(x), prevStart, prevEnd)).length;
+  const nextTasks = tasks.filter((x) => isTodo(x) && !x.done && inRange(x.due_date, nextStart, nextEnd)).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  // Everything finished in the week, in one list: posts that went live, to-dos and hotel visits.
+  const partnerName = new Map(partners.map((p) => [p.id, p.name]));
+  const visits = tasks.filter((x) => x.type === 'visit' && x.done && partnerName.has(x.partner_id) && inRange(doneOn(x), start, end));
+  const done = [
+    ...published.map((p) => ({ kind: 'post', date: wentLive(p), title: p.title, ref: p })),
+    ...doneTasks.map((x) => ({ kind: 'task', date: doneOn(x), title: x.title, ref: x })),
+    ...visits.map((x) => ({ kind: 'visit', date: doneOn(x), title: partnerName.get(x.partner_id), ref: x })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
   const nextDeadlines = posts.filter((p) => postDeadlineOpen(p) && inRange(p.deadline, nextStart, nextEnd)).sort((a, b) => a.deadline.localeCompare(b.deadline));
 
   // Google reviews: Business Profile reviews when connected (complete), else what Places returns.
@@ -1088,21 +1099,22 @@ export function weeklyReport({ posts = [], tasks = [], collaborators = [], socia
 
   // Collaborators
   const active = collaborators.filter((c) => c.status !== 'declined');
+  const year = start.slice(0, 4);
   const collabs = {
     tripsThisWeek: active.filter((c) => inRange(c.pickup_date, start, end)),
     onTrip: active.filter((c) => collabPhase(c, t) === 'on_trip'),
-    contentOverdue: active.filter((c) => collabPhase(c, t) === 'overdue'),
-    toRefund: active.filter((c) => c.status === 'delivered'),
     tripsNextWeek: active.filter((c) => inRange(c.pickup_date, nextStart, nextEnd)),
+    thisYear: active.filter((c) => c.status !== 'request' && (c.pickup_date ?? '').startsWith(year)).length,
   };
-  collabs.refundPending = collabs.toRefund.reduce((s, c) => s + (Number(c.refund_eur) || 0), 0);
 
   return {
     week: { start, end, number: isoWeek(start), prevStart, nextStart, nextEnd, current: inRange(t, start, end), future: start > t },
     followers,
     followersTotal,
-    content: { published, prevPublished, byChannel, byBrand: count(published, (p) => p.brand || 'both'), missed, nextPosts, nextDeadlines },
-    tasks: { done: doneTasks, prevDone, overdue: overdueTasks, next: nextTasks },
+    content: { published, prevPublished, byChannel, byBrand: count(published, (p) => p.brand || 'both'), nextPosts, nextDeadlines },
+    tasks: { done: doneTasks, prevDone, next: nextTasks },
+    done,
+    visits: visits.length,
     google,
     collabs,
   };

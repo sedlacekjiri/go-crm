@@ -2,7 +2,7 @@
 // Built from data the CRM already has – followers, posts, Google reviews, collaborations and
 // marketing tasks – plus free-text meeting notes saved per week. Can be printed or copied as text.
 import { avatar, channelTags, kpi, pageHeader } from '../components.js';
-import { compactNumber, mondayOf, POST_BRANDS, SOCIAL_BRANDS, shiftDate, today, weeklyReport } from '../lib.js';
+import { compactNumber, defaultReportWeek, mondayOf, POST_BRANDS, SOCIAL_BRANDS, shiftDate, today, weeklyReport } from '../lib.js';
 import { api, isAdmin, state, taskPerson } from '../store.js';
 import { copyText, esc, num, shortDate, toast } from '../util.js';
 
@@ -22,7 +22,7 @@ function vs(now, prev, unit = '') {
   if (now === null || prev === null || now === undefined || prev === undefined) return '';
   const d = now - prev;
   if (d === 0) return `same as last week${unit}`;
-  return `<span class="${d > 0 ? 'up' : 'late'}">${d > 0 ? '▲' : '▼'} ${num(Math.abs(d))}</span> vs last week${unit}`;
+  return `<span class="${d > 0 ? 'up' : ''}">${d > 0 ? '▲' : '▼'} ${num(Math.abs(d))}</span> vs last week${unit}`;
 }
 const weekLabel = (w) => `Week ${w.number} · ${shortDate(w.start)} – ${shortDate(w.end)} ${w.end.slice(0, 4)}`;
 const person = (x) => {
@@ -34,7 +34,7 @@ const list = (items, row, empty) => (items.length ? `<ul class="rep-list">${item
 
 export async function render(page, ctx) {
   const t = today();
-  const week = mondayOf(/^\d{4}-\d{2}-\d{2}$/.test(ctx.query.get('week') ?? '') ? ctx.query.get('week') : t);
+  const week = /^\d{4}-\d{2}-\d{2}$/.test(ctx.query.get('week') ?? '') ? mondayOf(ctx.query.get('week')) : defaultReportWeek(t);
   const go = (w) => ctx.navigate(`#/report?week=${w}`);
 
   let rv = null;
@@ -61,10 +61,10 @@ export async function render(page, ctx) {
       <button class="btn no-print" data-print>Print / PDF</button>`
     )}
     <div class="kpis">
-      ${kpi('Followers · all socials', ft.total === null ? '–' : compactNumber(ft.total), ft.week === null ? (ft.total === null ? 'type in counts on Marketing' : 'no count a week earlier') : `<span class="${ft.week > 0 ? 'up' : ft.week < 0 ? 'late' : ''}">${signed(ft.week)}</span> this week${ft.prevWeek !== null ? ` · ${signed(ft.prevWeek)} the week before` : ''}`)}
+      ${kpi('Followers · all socials', ft.total === null ? '–' : compactNumber(ft.total), ft.week === null ? (ft.total === null ? 'type in counts on Marketing' : 'no count a week earlier') : `<span class="${ft.week > 0 ? 'up' : ''}">${signed(ft.week)}</span> this week${ft.prevWeek !== null ? ` · ${signed(ft.prevWeek)} the week before` : ''}`)}
       ${kpi('Posts published', r.content.published.length, vs(r.content.published.length, r.content.prevPublished))}
       ${kpi('Google rating', r.google?.rating ? `<span class="star">★</span> ${r.google.rating.toFixed(1)}` : '–', r.google ? [r.google.total !== null ? `${num(r.google.total)} reviews` : '', r.google.countChange !== null ? `<span class="${r.google.countChange > 0 ? 'up' : ''}">${signed(r.google.countChange)}</span> this week` : ''].filter(Boolean).join(' · ') : 'not available')}
-      ${kpi('Marketing tasks done', r.tasks.done.length, vs(r.tasks.done.length, r.tasks.prevDone))}
+      ${kpi('Done this week', r.done.length, [`${r.content.published.length} post${r.content.published.length === 1 ? '' : 's'}`, `${r.tasks.done.length} task${r.tasks.done.length === 1 ? '' : 's'}`, r.visits ? `${r.visits} visit${r.visits === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '))}
     </div>
 
     <div class="grid rep-grid">
@@ -77,7 +77,7 @@ export async function render(page, ctx) {
               (f) => `<tr><td><span class="soc-ch"><i class="cdot c-${f.channel}"></i>${SOCIAL_LABEL[f.channel]}</span>
                 ${SOCIAL_BRANDS.some((b) => f.byBrand[b] !== null) ? `<div class="muted small">${SOCIAL_BRANDS.filter((b) => f.byBrand[b] !== null).map((b) => `${BRAND_SHORT[b]} ${esc(compactNumber(f.byBrand[b]))}`).join(' · ')}</div>` : ''}</td>
                 <td class="num"><b>${f.total === null ? '–' : num(f.total)}</b></td>
-                <td class="num">${f.week === null ? '–' : `<span class="${f.week > 0 ? 'up' : f.week < 0 ? 'late' : ''}">${signed(f.week)}</span>`}</td>
+                <td class="num">${f.week === null ? '–' : `<span class="${f.week > 0 ? 'up' : ''}">${signed(f.week)}</span>`}</td>
                 <td class="num">${f.change30 === null ? '–' : signed(f.change30)}</td></tr>`
             )
             .join('')}</tbody>
@@ -86,21 +86,21 @@ export async function render(page, ctx) {
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>Content published</h2><span class="sub">${r.content.published.length} post${r.content.published.length === 1 ? '' : 's'}</span></div>
-        ${
-          r.content.published.length
-            ? `<p class="small muted rep-sum">${[
-                ...Object.entries(r.content.byChannel).map(([c, n]) => `${esc(SOCIAL_LABEL[c] ?? c[0].toUpperCase() + c.slice(1))} ${n}`),
-                ...Object.entries(r.content.byBrand).map(([b, n]) => `${esc(BRAND_SHORT[b] ?? b)} ${n}`),
-              ].join(' · ')}</p>`
-            : ''
-        }
-        ${list(r.content.published, (p) => `<span class="rep-date">${esc(shortDate(p.published_at ? today(new Date(p.published_at)) : p.publish_date))}</span><span class="rep-title">${esc(p.title)}</span><span class="rep-tags">${channelTags(p.channels)}</span>`, 'Nothing published this week.')}
-        ${
-          r.content.missed.length
-            ? `<h3 class="rep-h late">Not published on time</h3>${list(r.content.missed, (p) => `<span class="rep-date">${esc(shortDate(p.publish_date))}</span><span class="rep-title">${esc(p.title)}</span><span class="pill">${p.status === 'scheduled' ? 'Scheduled' : 'In progress'}</span>`, '')}`
-            : ''
-        }
+        <div class="card-head"><h2>Content published</h2><span class="sub">${vs(r.content.published.length, r.content.prevPublished)}</span></div>
+        <div class="rep-stats">
+          <div><b class="num">${r.content.published.length}</b><span>posts published</span></div>
+          ${['instagram', 'facebook', 'tiktok'].map((c) => `<div><b class="num">${r.content.byChannel[c] ?? 0}</b><span><i class="cdot c-${c}"></i>${SOCIAL_LABEL[c]}</span></div>`).join('')}
+        </div>
+        ${Object.keys(r.content.byBrand).length ? `<p class="small muted rep-sum rep-after">${Object.entries(r.content.byBrand).map(([b, n]) => `${esc(BRAND_SHORT[b] ?? b)} ${n}`).join(' · ')}</p>` : ''}
+      </section>
+
+      <section class="card rep-wide">
+        <div class="card-head"><h2>Done this week</h2><span class="sub">${r.done.length} thing${r.done.length === 1 ? '' : 's'}</span></div>
+        ${list(
+          r.done,
+          (x) => `<span class="rep-date">${esc(shortDate(x.date))}</span><span class="rep-kind k-${x.kind}">${x.kind === 'post' ? 'Post' : x.kind === 'visit' ? 'Visit' : 'Task'}</span><span class="rep-title">${esc(x.title)}${x.kind === 'visit' ? ' <span class="muted small">hotel visit</span>' : ''}</span>${x.kind === 'post' ? `<span class="rep-tags">${channelTags(x.ref.channels)}</span>` : x.kind === 'task' ? person(x.ref) : ''}`,
+          'Nothing finished yet this week.'
+        )}
       </section>
 
       <section class="card">
@@ -114,7 +114,7 @@ export async function render(page, ctx) {
                 (x) => `<span class="rep-stars">${stars(x.rating)}</span><span class="rep-title"><b>${esc(x.author ?? 'Google user')}</b>${x.text ? ` <span class="muted">– ${esc(x.text.length > 140 ? `${x.text.slice(0, 140)}…` : x.text)}</span>` : ''}</span>`,
                 'No new reviews this week.'
               )}
-              ${r.google.complete ? '' : '<p class="muted small">Only the reviews Google’s Places API returns (5 at a time) – complete once the Business Profile connection is approved.</p>'}`
+              `
         }
       </section>
 
@@ -123,21 +123,13 @@ export async function render(page, ctx) {
         <div class="rep-stats">
           <div><b class="num">${r.collabs.tripsThisWeek.length}</b><span>trips started this week</span></div>
           <div><b class="num">${r.collabs.onTrip.length}</b><span>on a trip now</span></div>
-          <div><b class="num ${r.collabs.contentOverdue.length ? 'late' : ''}">${r.collabs.contentOverdue.length}</b><span>content overdue</span></div>
-          <div><b class="num">${r.collabs.toRefund.length}</b><span>refunds to pay${r.collabs.refundPending ? ` · €${num(r.collabs.refundPending)}` : ''}</span></div>
+          <div><b class="num">${r.collabs.tripsNextWeek.length}</b><span>trips next week</span></div>
+          <div><b class="num">${r.collabs.thisYear}</b><span>collaborations in ${esc(w.start.slice(0, 4))}</span></div>
         </div>
-        ${r.collabs.contentOverdue.length ? `<h3 class="rep-h late">Content overdue</h3>${list(r.collabs.contentOverdue, (c) => `<span class="rep-title">${esc(c.name)}</span><span class="muted small">trip ended ${esc(shortDate(c.dropoff_date))}</span>`, '')}` : ''}
         ${r.collabs.tripsNextWeek.length ? `<h3 class="rep-h">Trips next week</h3>${list(r.collabs.tripsNextWeek, (c) => `<span class="rep-date">${esc(shortDate(c.pickup_date))}</span><span class="rep-title">${esc(c.name)}</span><span class="muted small">${esc(BRAND_SHORT[c.brand] ?? '')}</span>`, '')}` : ''}
       </section>
 
-      <section class="card">
-        <div class="card-head"><h2>Tasks</h2><span class="sub">marketing</span></div>
-        <h3 class="rep-h first">Done this week</h3>
-        ${list(r.tasks.done, (x) => `${person(x)}<span class="rep-title">✓ ${esc(x.title)}</span>`, 'Nothing ticked off this week.')}
-        ${r.tasks.overdue.length ? `<h3 class="rep-h late">Overdue</h3>${list(r.tasks.overdue, (x) => `${person(x)}<span class="rep-title">${esc(x.title)}</span><span class="pill overdue">${esc(shortDate(x.due_date))}</span>`, '')}` : ''}
-      </section>
-
-      <section class="card">
+      <section class="card rep-wide">
         <div class="card-head"><h2>Next week</h2><span class="sub">${esc(shortDate(w.nextStart))} – ${esc(shortDate(w.nextEnd))}</span></div>
         ${list(
           [
@@ -210,19 +202,22 @@ function asText(r, notes) {
   for (const f of r.followers) if (f.total !== null) lines.push(`• ${SOCIAL_LABEL[f.channel]}: ${num(f.total)}${f.week !== null ? ` (${signed(f.week)} this week)` : ''}`);
   if (ft.total !== null) lines.push(`• Total: ${num(ft.total)}${ft.week !== null ? ` (${signed(ft.week)} this week)` : ''}`);
   else lines.push('• no counts yet');
-  lines.push('', `CONTENT – ${r.content.published.length} published (last week ${r.content.prevPublished})`);
-  for (const p of r.content.published) lines.push(`• ${shortDate(p.published_at ? today(new Date(p.published_at)) : p.publish_date)} ${p.title} [${(p.channels ?? []).map((c) => SOCIAL_LABEL[c] ?? c).join(', ')}] – ${brandName(p.brand)}`);
-  if (r.content.missed.length) lines.push(`Not published on time: ${r.content.missed.map((p) => p.title).join(', ')}`);
+  lines.push('', `CONTENT – ${r.content.published.length} posts published (last week ${r.content.prevPublished})`);
+  const ch = ['instagram', 'facebook', 'tiktok'].map((c) => `${SOCIAL_LABEL[c]} ${r.content.byChannel[c] ?? 0}`).join(' · ');
+  lines.push(`• ${ch}`);
+  lines.push('', `DONE THIS WEEK (${r.done.length})`);
+  for (const x of r.done) {
+    const who = x.kind === 'task' && taskPerson(x.ref) ? ` – ${taskPerson(x.ref).name.split(' ')[0]}` : '';
+    const extra = x.kind === 'post' ? ` [${(x.ref.channels ?? []).map((c) => SOCIAL_LABEL[c] ?? c).join(', ')}] – ${brandName(x.ref.brand)}` : '';
+    lines.push(`• ${shortDate(x.date)} ${x.kind === 'post' ? 'Post' : x.kind === 'visit' ? 'Visit' : 'Task'}: ${x.title}${extra}${who}`);
+  }
   if (r.google) {
     lines.push('', 'GOOGLE REVIEWS');
     if (r.google.rating) lines.push(`• Rating ${r.google.rating.toFixed(1)} ★${r.google.total !== null ? `, ${num(r.google.total)} reviews` : ''}${r.google.countChange !== null ? ` (${signed(r.google.countChange)} this week)` : ''}`);
     lines.push(`• New this week: ${r.google.newReviews.length}${r.google.newAverage !== null ? `, average ${r.google.newAverage.toFixed(1)} ★` : ''}`);
   }
   const c = r.collabs;
-  lines.push('', 'COLLABORATORS', `• Trips this week: ${c.tripsThisWeek.length} · on a trip now: ${c.onTrip.length}`, `• Content overdue: ${c.contentOverdue.length}${c.contentOverdue.length ? ` (${c.contentOverdue.map((x) => x.name).join(', ')})` : ''}`, `• Refunds to pay: ${c.toRefund.length}${c.refundPending ? ` – €${num(c.refundPending)}` : ''}`);
-  lines.push('', `TASKS DONE (${r.tasks.done.length})`);
-  for (const x of r.tasks.done) lines.push(`• ${x.title}${taskPerson(x) ? ` – ${taskPerson(x).name.split(' ')[0]}` : ''}`);
-  if (r.tasks.overdue.length) lines.push(`Overdue: ${r.tasks.overdue.map((x) => x.title).join(', ')}`);
+  lines.push('', 'COLLABORATORS', `• Trips this week: ${c.tripsThisWeek.length} · on a trip now: ${c.onTrip.length} · next week: ${c.tripsNextWeek.length}`, `• Collaborations in ${w.start.slice(0, 4)}: ${c.thisYear}`);
   const next = [...r.content.nextPosts.map((p) => `${shortDate(p.publish_date)} post: ${p.title}`), ...r.tasks.next.map((x) => `${shortDate(x.due_date)} ${x.title}`)];
   if (next.length) lines.push('', 'NEXT WEEK', ...next.map((s) => `• ${s}`));
   if (notes?.trim()) lines.push('', 'NOTES', notes.trim());

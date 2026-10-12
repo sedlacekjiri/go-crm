@@ -994,3 +994,10 @@ button.row:hover { background: var(--surface-2); }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 .rep-table th:first-child, .rep-table td:first-child { padding-left: 0; }
+.rep-wide { grid-column: 1 / -1; }
+.rep-after { margin: 10px 0 0; }
+.rep-stats .cdot { margin-right: 4px; }
+.rep-kind { flex: 0 0 44px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; border-radius: 6px; padding: 2px 0; }
+.rep-kind.k-post { color: var(--mkt); background: color-mix(in srgb, var(--mkt) 12%, transparent); }
+.rep-kind.k-task { color: var(--text-2); background: var(--surface-2); }
+.rep-kind.k-visit { color: var(--accent); background: var(--accent-soft); }

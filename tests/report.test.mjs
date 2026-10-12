@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { isoWeek, mondayOf, weeklyReport } from '../public/js/lib.js';
+import { defaultReportWeek, isoWeek, mondayOf, weeklyReport } from '../public/js/lib.js';
 
 describe('weeks', () => {
   it('finds Monday and the ISO week', () => {
@@ -9,6 +9,12 @@ describe('weeks', () => {
     assert.equal(isoWeek('2026-10-12'), 42);
     assert.equal(isoWeek('2026-01-01'), 1);
     assert.equal(isoWeek('2027-01-01'), 53); // Friday → last week of 2026
+  });
+  it('opens last week on Monday and Tuesday', () => {
+    assert.equal(defaultReportWeek('2026-10-12'), '2026-10-05');
+    assert.equal(defaultReportWeek('2026-10-13'), '2026-10-05');
+    assert.equal(defaultReportWeek('2026-10-14'), '2026-10-12');
+    assert.equal(defaultReportWeek('2026-10-18'), '2026-10-12');
   });
 });
 
@@ -64,12 +70,10 @@ describe('weeklyReport', () => {
     assert.deepEqual(r.content.published.map((p) => p.id), ['a']);
     assert.equal(r.content.prevPublished, 1);
     assert.deepEqual(r.content.byChannel, { instagram: 1, tiktok: 1 });
-    assert.deepEqual(r.content.missed.map((p) => p.id), ['c']);
     assert.deepEqual(r.content.nextPosts.map((p) => p.id), ['d']);
   });
-  it('lists marketing tasks only', () => {
-    assert.deepEqual(r.tasks.done.map((x) => x.id), [1]);
-    assert.deepEqual(r.tasks.overdue.map((x) => x.id), [3]);
+  it('lists to-dos done in the week (any category) and next week’s', () => {
+    assert.deepEqual(r.tasks.done.map((x) => x.id), [1, 2]);
     assert.deepEqual(r.tasks.next.map((x) => x.id), [4]);
   });
   it('summarises Google reviews', () => {
@@ -77,10 +81,19 @@ describe('weeklyReport', () => {
     assert.equal(r.google.countChange, 5);
     assert.deepEqual(r.google.newReviews.map((x) => x.id), ['r1']);
   });
+  it('puts posts, tasks and visits in one done list', () => {
+    const rr = weeklyReport(
+      { ...data, partners: [{ id: 'h', name: 'Hotel Borg' }], tasks: [...data.tasks, { id: 9, type: 'visit', partner_id: 'h', done: true, done_at: '2026-10-06T15:00:00Z', due_date: '2026-10-06' }] },
+      null,
+      '2026-10-05',
+      '2026-10-12'
+    );
+    assert.deepEqual(rr.done.map((x) => `${x.kind}:${x.title}`), ['post:Reel', 'visit:Hotel Borg', 'task:Done mkt', 'task:Done sales']);
+    assert.equal(rr.visits, 1);
+  });
   it('summarises collaborations', () => {
     assert.deepEqual(r.collabs.tripsThisWeek.map((c) => c.id), ['x']);
-    assert.deepEqual(r.collabs.contentOverdue.map((c) => c.id), ['x']);
-    assert.equal(r.collabs.refundPending, 300);
+    assert.equal(r.collabs.thisYear, 2);
     assert.deepEqual(r.collabs.tripsNextWeek.map((c) => c.id), ['z']);
   });
 });
