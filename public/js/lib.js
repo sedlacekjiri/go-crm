@@ -993,3 +993,117 @@ export function compactNumber(n) {
   if (a >= 1e4) return `${+(n / 1e3).toFixed(1)}k`;
   return new Intl.NumberFormat('en-GB').format(n);
 }
+
+// ── Weekly marketing report ─────────────────────────────────────
+// Monday of the week a date falls in.
+export function mondayOf(date) {
+  const wd = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return shiftDate(date, -wd);
+}
+
+// ISO week number (weeks start on Monday, week 1 holds the first Thursday).
+export function isoWeek(date) {
+  const thursday = shiftDate(mondayOf(date), 3);
+  const jan1 = `${thursday.slice(0, 4)}-01-01`;
+  return Math.floor(daysBetween(jan1, thursday) / 7) + 1;
+}
+
+// The day a post actually went live (published_at), else its planned date.
+const wentLive = (p) => (p.published_at ? today(new Date(p.published_at)) : p.publish_date);
+const inRange = (d, from, to) => !!d && d >= from && d <= to;
+
+// Everything for one week's marketing meeting, from data the CRM already has.
+// `reviews` is the /api/reviews payload (or null while it loads / without access).
+export function weeklyReport({ posts = [], tasks = [], collaborators = [], social = [] }, reviews, weekStart, t = today()) {
+  const start = mondayOf(weekStart);
+  const end = shiftDate(start, 6);
+  const prevStart = shiftDate(start, -7);
+  const prevEnd = shiftDate(start, -1);
+  const nextStart = shiftDate(start, 7);
+  const nextEnd = shiftDate(start, 13);
+  const until = end < t ? end : t; // the current week only counts up to today
+  const isMarketing = (x) => x.type !== 'visit' && (x.category || 'sales') === 'marketing';
+
+  // Followers: state at the end of the week, growth against the end of the week before.
+  const nowS = socialSummary(social, until);
+  const prevS = socialSummary(social, prevEnd);
+  const followers = nowS.map((s, i) => ({
+    channel: s.channel,
+    total: s.total,
+    byBrand: s.byBrand,
+    week: s.change7,
+    prevWeek: prevS[i].change7,
+    change30: s.change30,
+    series: s.series,
+  }));
+  const sum = (list, k) => (list.some((x) => x[k] !== null) ? list.reduce((a, x) => a + (x[k] ?? 0), 0) : null);
+  const followersTotal = { total: sum(followers, 'total'), week: sum(followers, 'week'), prevWeek: sum(followers, 'prevWeek') };
+
+  // Content
+  const published = posts.filter((p) => p.status === 'published' && inRange(wentLive(p), start, end)).sort((a, b) => wentLive(a).localeCompare(wentLive(b)));
+  const prevPublished = posts.filter((p) => p.status === 'published' && inRange(wentLive(p), prevStart, prevEnd)).length;
+  const count = (list, key) => list.reduce((m, p) => ((m[key(p)] = (m[key(p)] ?? 0) + 1), m), {});
+  const byChannel = {};
+  for (const p of published) for (const c of p.channels ?? []) byChannel[c] = (byChannel[c] ?? 0) + 1;
+  const missed = posts
+    .filter((p) => (p.status === 'scheduled' || p.status === 'in_progress') && p.publish_date && p.publish_date <= end && p.publish_date < t)
+    .sort((a, b) => a.publish_date.localeCompare(b.publish_date));
+  const nextPosts = posts
+    .filter((p) => p.status !== 'idea' && p.status !== 'published' && inRange(p.publish_date, nextStart, nextEnd))
+    .sort((a, b) => (a.publish_date + (a.publish_time ?? '')).localeCompare(b.publish_date + (b.publish_time ?? '')));
+
+  // Tasks
+  const doneOn = (x) => (x.done_at ? x.done_at.slice(0, 10) : x.due_date);
+  const doneTasks = tasks.filter((x) => isMarketing(x) && x.done && inRange(doneOn(x), start, end)).sort((a, b) => doneOn(a).localeCompare(doneOn(b)));
+  const prevDone = tasks.filter((x) => isMarketing(x) && x.done && inRange(doneOn(x), prevStart, prevEnd)).length;
+  const overdueTasks = tasks.filter((x) => isMarketing(x) && !x.done && x.due_date < t).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const nextTasks = tasks.filter((x) => isMarketing(x) && !x.done && inRange(x.due_date, nextStart, nextEnd)).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const nextDeadlines = posts.filter((p) => postDeadlineOpen(p) && inRange(p.deadline, nextStart, nextEnd)).sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+  // Google reviews: Business Profile reviews when connected (complete), else what Places returns.
+  let google = null;
+  if (reviews) {
+    const all = reviews.reviews ?? [];
+    const pool = all.some((r) => r.source === 'gbp') ? all.filter((r) => r.source === 'gbp') : all;
+    const day = (r) => (r.published_at ?? '').slice(0, 10);
+    const newReviews = pool.filter((r) => inRange(day(r), start, end)).sort((a, b) => (b.published_at ?? '').localeCompare(a.published_at ?? ''));
+    const prevCount = pool.filter((r) => inRange(day(r), prevStart, prevEnd)).length;
+    const loc = (reviews.google?.locations ?? []).filter((l) => l.active && l.total != null).sort((a, b) => b.total - a.total)[0];
+    const place = (reviews.places ?? []).filter((p) => p.rating_count != null).sort((a, b) => b.rating_count - a.rating_count)[0];
+    const snaps = place ? (reviews.snapshots ?? []).filter((s) => s.place_id === place.place_id) : [];
+    const snapAt = (d) => snaps.filter((s) => s.day <= d).at(-1) ?? null;
+    const a = snapAt(until);
+    const b = snapAt(prevEnd);
+    google = {
+      rating: loc ? Number(loc.average) : place?.rating ?? null,
+      total: loc ? loc.total : place?.rating_count ?? null,
+      name: loc?.title ?? place?.name ?? null,
+      countChange: a && b ? a.rating_count - b.rating_count : null,
+      newReviews,
+      prevCount,
+      newAverage: newReviews.length ? newReviews.reduce((s, r) => s + (r.rating || 0), 0) / newReviews.length : null,
+      complete: pool.some((r) => r.source === 'gbp'),
+    };
+  }
+
+  // Collaborators
+  const active = collaborators.filter((c) => c.status !== 'declined');
+  const collabs = {
+    tripsThisWeek: active.filter((c) => inRange(c.pickup_date, start, end)),
+    onTrip: active.filter((c) => collabPhase(c, t) === 'on_trip'),
+    contentOverdue: active.filter((c) => collabPhase(c, t) === 'overdue'),
+    toRefund: active.filter((c) => c.status === 'delivered'),
+    tripsNextWeek: active.filter((c) => inRange(c.pickup_date, nextStart, nextEnd)),
+  };
+  collabs.refundPending = collabs.toRefund.reduce((s, c) => s + (Number(c.refund_eur) || 0), 0);
+
+  return {
+    week: { start, end, number: isoWeek(start), prevStart, nextStart, nextEnd, current: inRange(t, start, end), future: start > t },
+    followers,
+    followersTotal,
+    content: { published, prevPublished, byChannel, byBrand: count(published, (p) => p.brand || 'both'), missed, nextPosts, nextDeadlines },
+    tasks: { done: doneTasks, prevDone, overdue: overdueTasks, next: nextTasks },
+    google,
+    collabs,
+  };
+}

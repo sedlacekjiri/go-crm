@@ -15,6 +15,7 @@ import * as tasks from './views/tasks.js';
 import * as team from './views/team.js';
 import * as marketing from './views/marketing.js';
 import * as collaborators from './views/collaborators.js';
+import * as report from './views/report.js';
 
 // Menu in groups: general on top, then Sales (just for you) and Marketing.
 // `group` is also what colleagues get access to (Team → sections).
@@ -27,6 +28,7 @@ const NAV = [
   { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals, group: 'Sales' },
   { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing, group: 'Marketing' },
   { href: '#/collaborators', key: 'collaborators', label: 'Collaborators', icon: ICONS.collab, group: 'Marketing' },
+  { href: '#/report', key: 'report', label: 'Report', icon: ICONS.report, group: 'Marketing' },
 ];
 
 // NAV items with a heading before the first item of each group.
@@ -56,6 +58,7 @@ const ROUTES = [
   { re: /^\/team$/, nav: 'team', view: team },
   { re: /^\/marketing$/, nav: 'marketing', view: marketing },
   { re: /^\/collaborators$/, nav: 'collaborators', view: collaborators },
+  { re: /^\/report$/, nav: 'report', view: report },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },

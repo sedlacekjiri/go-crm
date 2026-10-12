@@ -13,7 +13,7 @@ export async function onRequestGet({ request, env }) {
   const sales = auth.has('sales');
   const marketing = auth.has('marketing');
   const none = db.prepare('SELECT 1 WHERE 0');
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes] = await db.batch([
     sales ? db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM activities ORDER BY happened_at DESC') : none,
@@ -28,6 +28,7 @@ export async function onRequestGet({ request, env }) {
     sales ? db.prepare('SELECT COUNT(*) AS n, MIN(booking_date) AS first, MAX(booking_date) AS last, MAX(imported_at) AS imported FROM sales') : none,
     db.prepare(`SELECT * FROM users WHERE active = 1 ORDER BY role = 'owner' DESC, name COLLATE NOCASE`),
     marketing ? db.prepare('SELECT account, date, followers FROM social_stats ORDER BY date') : none,
+    marketing ? db.prepare('SELECT week, notes, updated_by, updated_at FROM report_notes') : none,
   ]);
   return json({
     me: auth.user,
@@ -49,5 +50,6 @@ export async function onRequestGet({ request, env }) {
     goals: goals.results,
     salesInfo: salesInfo.results[0] ?? null,
     social: social.results,
+    reportNotes: reportNotes.results,
   });
 }

@@ -362,6 +362,13 @@ const SCHEMA = [
     updated_at TEXT NOT NULL,
     PRIMARY KEY (account, date)
   )`,
+  // Notes for the weekly marketing meeting (week = its Monday).
+  `CREATE TABLE IF NOT EXISTS report_notes (
+    week TEXT PRIMARY KEY,
+    notes TEXT,
+    updated_by TEXT,
+    updated_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
