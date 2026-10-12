@@ -353,6 +353,15 @@ const SCHEMA = [
     expires_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id)`,
+  // Followers on our own social accounts, typed in by hand now and then (account = "instagram:car").
+  `CREATE TABLE IF NOT EXISTS social_stats (
+    account TEXT NOT NULL,
+    date TEXT NOT NULL,
+    followers INTEGER NOT NULL,
+    updated_by TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (account, date)
+  )`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,

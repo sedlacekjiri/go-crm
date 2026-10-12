@@ -3,6 +3,9 @@ import { assigneeAvatar, channelTags, kpi, onSeg, pageHeader, seg } from '../com
 import {
   CHANNELS,
   CHECKLIST_TEMPLATES,
+  compactNumber,
+  SOCIAL_BRANDS,
+  socialSummary,
   FORMATS,
   monthGrid,
   monthOf,
@@ -64,6 +67,7 @@ export async function render(page, ctx) {
       ${kpi('Ideas in the bank', ideas.length, ideas.length ? 'ready to schedule' : 'add one with + Idea')}
       <div class="kpi" id="ratingKpi"><div class="label">Google rating</div><div class="value">…</div><div class="delta"></div></div>
     </div>
+    ${socialRow()}
     ${deadlinesCard()}
     <nav class="tabs">${TABS.map((x) => `<a href="#/marketing?tab=${x.value}" class="${x.value === tab ? 'active' : ''}">${x.label}${x.value === 'ideas' ? `<span class="count">${ideas.length}</span>` : ''}</a>`).join('')}</nav>
     <div id="mBody"></div>`;
@@ -75,6 +79,7 @@ export async function render(page, ctx) {
     else if (b.dataset.dlTask) taskModal(state.tasks.find((x) => x.id === b.dataset.dlTask), ctx.refresh);
     else if ('dlNew' in b.dataset) taskModal({ type: 'todo', category: 'marketing', start_date: today(), due_date: shiftDate(today(), 7) }, ctx.refresh);
   });
+  page.querySelector('[data-social-update]')?.addEventListener('click', () => socialModal(ctx.refresh));
   page.querySelector('[data-new-post]')?.addEventListener('click', () => postModal({ status: 'in_progress', publish_date: v.selected, channels: ['instagram'] }, ctx.refresh));
   page.querySelector('[data-new-idea]')?.addEventListener('click', () => postModal({ status: 'idea', channels: [] }, ctx.refresh));
 
@@ -676,6 +681,102 @@ function readyByPill(p) {
   if (!p.deadline) return '';
   if (p.status === 'scheduled' || p.status === 'published') return '<span class="pill good">✓ ready</span>';
   return deadlinePill(Math.round((Date.parse(`${p.deadline}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86400000), 'ready by · ');
+}
+
+// ── Followers on our socials (typed in by hand, with history) ──
+const SOCIAL_LABEL = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok' };
+const BRAND_SHORT = { car: 'Car Rentals', camper: 'Campers' };
+const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${num(Math.abs(n))}`;
+
+function socialSpark(series) {
+  if (series.length < 2) return '';
+  const vals = series.map((p) => p.total);
+  const min = Math.min(...vals);
+  const span = Math.max(...vals) - min || 1;
+  const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * 100).toFixed(1)},${(28 - ((v - min) / span) * 24).toFixed(1)}`);
+  return `<svg class="soc-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts.join(' ')}" /></svg>`;
+}
+
+function socialRow() {
+  const list = socialSummary(state.social ?? [], today());
+  const updated = list.map((s) => s.updated).filter(Boolean).sort().at(-1);
+  const growth = (s) => {
+    const [n, label] = s.change30 !== null ? [s.change30, 'in 30 days'] : s.sinceFirst !== null ? [s.sinceFirst, `since ${shortDate(s.first)}`] : [null];
+    return n === null ? (s.updated ? `counted ${esc(shortDate(s.updated))}` : 'no count yet') : `<span class="${n > 0 ? 'up' : n < 0 ? 'late' : ''}">${signed(n)}</span> ${label}`;
+  };
+  return `<div class="kpis social-kpis">
+    ${list
+      .map(
+        (s) => `<div class="kpi soc-kpi">
+          <div class="label"><i class="cdot c-${s.channel}"></i>${SOCIAL_LABEL[s.channel]} followers</div>
+          <div class="value num">${compactNumber(s.total)}</div>
+          <div class="delta">${growth(s)}</div>
+          ${SOCIAL_BRANDS.some((b) => s.byBrand[b] !== null) ? `<div class="delta">${SOCIAL_BRANDS.filter((b) => s.byBrand[b] !== null).map((b) => `${BRAND_SHORT[b]} ${esc(compactNumber(s.byBrand[b]))}`).join(' · ')}</div>` : ''}
+          ${socialSpark(s.series)}
+        </div>`
+      )
+      .join('')}
+    <div class="kpi soc-kpi soc-update">
+      <div class="label">Socials</div>
+      <div class="delta">${updated ? `Last counted ${esc(shortDate(updated))}${updated < shiftDate(today(), -7) ? ' · <b class="late">time for a new count</b>' : ''}` : 'Type in today’s follower counts to start tracking growth.'}</div>
+      ${isAdmin() ? '<button class="btn secondary sm" data-social-update>Update followers</button>' : ''}
+    </div>
+  </div>`;
+}
+
+function socialModal(refresh) {
+  const rows = state.social ?? [];
+  const at = (account, date) => rows.find((r) => r.account === account && r.date === date)?.followers ?? null;
+  const before = (account, date) => rows.filter((r) => r.account === account && r.date <= date).sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.followers ?? null;
+  const accounts = Object.keys(SOCIAL_LABEL).flatMap((c) => SOCIAL_BRANDS.map((b) => ({ id: `${c}:${b}`, c, b })));
+  const m = openModal(
+    'Update followers',
+    `<form>
+      <label class="field"><span>Counted on</span><input class="input" type="date" name="date" max="${today()}" value="${today()}" required /></label>
+      <p class="muted small">Open each profile and copy the follower number. Leave an account empty if we don’t have it.</p>
+      <div class="soc-grid">
+        <span></span>${SOCIAL_BRANDS.map((b) => `<b class="small">${POST_BRANDS.find((x) => x.value === b).label}</b>`).join('')}
+        ${Object.keys(SOCIAL_LABEL)
+          .map((c) => `<span class="soc-ch"><i class="cdot c-${c}"></i>${SOCIAL_LABEL[c]}</span>${SOCIAL_BRANDS.map((b) => `<input class="input" type="number" min="0" step="1" inputmode="numeric" name="${c}:${b}" aria-label="${SOCIAL_LABEL[c]} ${BRAND_SHORT[b]}" />`).join('')}`)
+          .join('')}
+      </div>
+      <button class="btn block" type="submit">Save</button>
+    </form>`
+  );
+  const form = m.el.querySelector('form');
+  // Show what's saved for the chosen day; the last known count is the hint.
+  const fill = () => {
+    const d = form.date.value;
+    for (const a of accounts) {
+      const input = form.elements[a.id];
+      const v = at(a.id, d);
+      input.value = v ?? '';
+      const prev = before(a.id, d);
+      input.placeholder = prev !== null ? `last ${num(prev)}` : '–';
+    }
+  };
+  fill();
+  form.date.addEventListener('change', fill);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const date = form.date.value;
+    const values = {};
+    for (const a of accounts) {
+      const raw = form.elements[a.id].value.trim();
+      const saved = at(a.id, date);
+      if (raw === '' && saved !== null) values[a.id] = null; // cleared → remove that day's count
+      else if (raw !== '' && Number(raw) !== saved) values[a.id] = Number(raw);
+    }
+    if (!Object.keys(values).length) return m.close();
+    try {
+      await api('/api/social', { method: 'POST', body: { date, values } });
+      m.close();
+      toast('Followers saved');
+      refresh();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
 }
 
 // Upcoming / overdue marketing deadlines (posts' "ready by" + marketing tasks) at the top of Marketing.

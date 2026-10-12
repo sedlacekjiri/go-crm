@@ -948,3 +948,48 @@ export function parseCollabSheet(rows, { brand, year }) {
   }
   return { items, skipped };
 }
+
+// ── Social followers (typed in by hand) ─────────────────────────
+export const SOCIAL_CHANNELS = ['instagram', 'facebook', 'tiktok'];
+export const SOCIAL_BRANDS = ['car', 'camper'];
+
+// Per channel: followers now (latest count of each brand's account added up), growth over the
+// last 7 / 30 days and since the first entry, and the totals over time for a sparkline.
+// Growth only compares accounts that already had a count back then, so adding the Campers
+// account later doesn't look like a jump in followers.
+export function socialSummary(rows = [], t = today()) {
+  return SOCIAL_CHANNELS.map((channel) => {
+    const history = Object.fromEntries(
+      SOCIAL_BRANDS.map((b) => [b, rows.filter((r) => r.account === `${channel}:${b}` && r.date <= t).sort((x, y) => x.date.localeCompare(y.date))])
+    );
+    const on = (b, date) => history[b].filter((r) => r.date <= date).at(-1) ?? null;
+    const latest = Object.fromEntries(SOCIAL_BRANDS.map((b) => [b, history[b].at(-1) ?? null]));
+    const brands = SOCIAL_BRANDS.filter((b) => latest[b]);
+    const total = brands.length ? brands.reduce((s, b) => s + latest[b].followers, 0) : null;
+    const growth = (base) => {
+      const with_ = brands.filter((b) => base(b));
+      return with_.length ? with_.reduce((s, b) => s + latest[b].followers - base(b).followers, 0) : null;
+    };
+    const dates = [...new Set(brands.flatMap((b) => history[b].map((r) => r.date)))].sort();
+    return {
+      channel,
+      total,
+      byBrand: Object.fromEntries(SOCIAL_BRANDS.map((b) => [b, latest[b]?.followers ?? null])),
+      updated: dates.at(-1) ?? null,
+      first: dates[0] ?? null,
+      change7: growth((b) => on(b, shiftDate(t, -7))),
+      change30: growth((b) => on(b, shiftDate(t, -30))),
+      sinceFirst: dates.length > 1 ? growth((b) => history[b][0]) : null,
+      series: dates.map((d) => ({ date: d, total: brands.reduce((s, b) => s + (on(b, d)?.followers ?? 0), 0) })),
+    };
+  });
+}
+
+// 12345 → "12.3k", 1520000 → "1.52M"
+export function compactNumber(n) {
+  if (n === null || n === undefined) return '–';
+  const a = Math.abs(n);
+  if (a >= 1e6) return `${+(n / 1e6).toFixed(a >= 1e7 ? 1 : 2)}M`;
+  if (a >= 1e4) return `${+(n / 1e3).toFixed(1)}k`;
+  return new Intl.NumberFormat('en-GB').format(n);
+}
