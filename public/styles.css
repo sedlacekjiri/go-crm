@@ -912,3 +912,6 @@ button.row:hover { background: var(--surface-2); }
   .collab-cards { display: block; }
 }
 .import-sheets td, .import-sheets th { padding: 6px; } .import-sheets tr.muted td { color: var(--text-3); }
+.nav-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; padding: 16px 12px 6px; }
+.sheet-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 12px 4px; }
+.sheet-label:first-child { padding-top: 0; }

@@ -15,18 +15,32 @@ import * as tasks from './views/tasks.js';
 import * as marketing from './views/marketing.js';
 import * as collaborators from './views/collaborators.js';
 
+// Menu in groups: general on top, then Sales (just for you) and Marketing.
+// `group` is also the unit for sharing sections with colleagues later.
 const NAV = [
-  { href: '#/', key: 'home', label: 'Home', icon: ICONS.home },
-  { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners },
-  { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks },
-  { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing },
-  { href: '#/collaborators', key: 'collaborators', label: 'Collaborators', icon: ICONS.collab },
-  { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline },
-  { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales },
-  { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals },
+  { href: '#/', key: 'home', label: 'Home', icon: ICONS.home, group: '' },
+  { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks, group: '' },
+  { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners, group: 'Sales' },
+  { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline, group: 'Sales' },
+  { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales, group: 'Sales' },
+  { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals, group: 'Sales' },
+  { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing, group: 'Marketing' },
+  { href: '#/collaborators', key: 'collaborators', label: 'Collaborators', icon: ICONS.collab, group: 'Marketing' },
 ];
 
-const TABS = ['home', 'partners', 'tasks', 'marketing'];
+// NAV items with a heading before the first item of each group.
+const grouped = (items, link, label) => {
+  let last = null;
+  return items
+    .map((n) => {
+      const head = n.group && n.group !== last ? label(n.group) : '';
+      last = n.group;
+      return head + link(n);
+    })
+    .join('');
+};
+
+const TABS = ['home', 'tasks', 'partners', 'marketing'];
 
 const ROUTES = [
   { re: /^\/$/, nav: 'home', view: dashboard },
@@ -94,7 +108,7 @@ function updateBadges() {
 function buildNav() {
   const item = (n) =>
     `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
-  $('#nav').innerHTML = NAV.map(item).join('');
+  $('#nav').innerHTML = grouped(NAV, item, (g) => `<div class="nav-label">${g}</div>`);
   // Phones: the four most used sections as tabs, the rest under "More".
   $('#tabbar').innerHTML =
     NAV.filter((n) => TABS.includes(n.key)).map(item).join('') +
@@ -127,9 +141,11 @@ document.addEventListener('click', (e) => {
     e.preventDefault();
     const m = openModal(
       'More',
-      `<nav class="sheet-nav">${NAV.filter((n) => !TABS.includes(n.key))
-        .map((n) => `<a href="${n.href}">${n.icon}<span>${n.label}</span></a>`)
-        .join('')}</nav>
+      `<nav class="sheet-nav">${grouped(
+        NAV.filter((n) => !TABS.includes(n.key)),
+        (n) => `<a href="${n.href}">${n.icon}<span>${n.label}</span></a>`,
+        (g) => `<div class="sheet-label">${g}</div>`
+      )}</nav>
        <div class="stack" style="margin-top:12px">
          <p class="muted small">${isAdmin() ? 'Admin – full access' : 'View only'}${currency.rate ? ` · 1 € = ${currency.rate.toFixed(1)} kr` : ''}</p>
          <button class="btn secondary block" data-m="theme">Switch light / dark</button>
