@@ -201,6 +201,7 @@ function fileModal(f, redraw) {
       <button class="btn danger block" type="button" data-remove>Delete file</button>
     </form>`
   );
+  m.el.querySelector('.modal').classList.add('narrow');
   const form = m.el.querySelector('form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -240,6 +241,7 @@ function folderModal(folder, redraw) {
       ${folder ? '<button class="btn danger block" type="button" data-remove>Delete folder</button><p class="muted small">Deleting a folder keeps its files – they just won’t be in a folder anymore.</p>' : ''}
     </form>`
   );
+  m.el.querySelector('.modal').classList.add('narrow');
   const form = m.el.querySelector('form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

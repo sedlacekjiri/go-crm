@@ -153,6 +153,7 @@ export function payoutModal(aff, earnings, refresh) {
       }
     </form>`
   );
+  m.el.querySelector('.modal').classList.add('narrow');
   const form = m.el.querySelector('form');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

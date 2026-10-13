@@ -382,8 +382,8 @@ dl.details a { color: var(--accent); text-decoration: none; }
 
 /* ── Modal (bottom sheet on phones) ────── */
 .modal-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.4); animation: fadeIn 0.15s ease; }
-.modal { background: var(--surface); border-radius: 20px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 20px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25); }
-.modal.wide { max-width: 780px; padding: 24px 28px; }
+.modal { background: var(--surface); border-radius: 20px; width: 100%; max-width: 780px; max-height: 90vh; overflow-y: auto; padding: 24px 28px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25); }
+.modal.narrow { max-width: 460px; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
 .modal-head h2 { font-size: 17px; font-weight: 700; }
 .modal-close { border: 0; background: var(--surface-2); border-radius: 50%; width: 30px; height: 30px; font-size: 18px; line-height: 1; color: var(--text-2); flex-shrink: 0; }
@@ -1035,5 +1035,6 @@ label.btn.file-add input { position: absolute; inset: 0; opacity: 0; cursor: poi
   .lib-src { display: none; }
 }
 @media (max-width: 860px) {
-  .modal.wide { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); }
+  .modal { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); }
+  .modal.narrow { max-width: none; }
 }

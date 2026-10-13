@@ -180,6 +180,7 @@ document.addEventListener('click', (e) => {
          <button class="btn secondary block" data-m="logout">Log out</button>
        </div>`
     );
+    m.el.querySelector('.modal').classList.add('narrow');
     m.el.addEventListener('click', (ev) => {
       if (ev.target.closest('a')) return m.close();
       const b = ev.target.closest('[data-m]');
@@ -205,6 +206,7 @@ document.addEventListener('click', (e) => {
         <button class="btn secondary block" data-m="logout">Log out</button>
       </div>`
     );
+    m.el.querySelector('.modal').classList.add('narrow');
     m.el.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-m]');
       if (!b) return;
