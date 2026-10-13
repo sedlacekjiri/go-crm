@@ -2,6 +2,7 @@
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
+import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { api, can, isAdmin, isTeamAdmin, state, taskPerson, userById } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
@@ -85,7 +86,7 @@ export function render(page, ctx) {
       ${admin ? `<button type="button" class="tick ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
         <span class="title">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</span>
-        <div class="meta">${[taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', task.notes ? esc(task.notes) : '']
+        <div class="meta">${[taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', fileCount('task', task.id) ? `<span class="clip">📎 ${fileCount('task', task.id)}</span>` : '', task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
       </div>
@@ -120,7 +121,7 @@ export function render(page, ctx) {
       <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
       <div class="body">
         <button type="button" class="title as-link" data-post="${p.id}">${esc(p.title)}</button>
-        <div class="meta">${!category ? categoryTag('marketing') : ''}${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}</div>
+        <div class="meta">${!category ? categoryTag('marketing') : ''}${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}</div>
       </div>
       ${isAdmin() && p.status !== 'published' ? `<div class="acts">${readyBy || ['idea', 'in_progress'].includes(p.status) ? `<button class="btn secondary sm" data-ready="${p.id}">Ready ✓</button>` : `<button class="btn secondary sm" data-published="${p.id}">Mark published</button>`}</div>` : ''}
     </li>`;
@@ -468,6 +469,7 @@ export function taskModal(task, refresh) {
             )}</select></label>`
       }
       <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2">${esc(task.notes ?? '')}</textarea></label>
+      ${filesFieldHtml(isAdmin())}
       ${isVisit ? '' : `<div class="field"><span>Subtasks</span><ul class="sub-edit" data-sub-edit></ul>
         <div class="sub-add"><input class="input" data-sub-new placeholder="Add a step and press Enter" autocomplete="off" /><button class="btn secondary sm" type="button" data-sub-new-btn>Add</button></div></div>`}
       <button class="btn block" type="submit">${task.id ? 'Save' : 'Add task'}</button>
@@ -476,6 +478,7 @@ export function taskModal(task, refresh) {
   );
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
+  const files = mountFiles(m.el, 'task', task.id, isAdmin());
   let cat = task.category || defaultCategory();
   // Checklist editor (kept in memory, saved with the task).
   let subs = (task.subtasks ?? []).map((s) => ({ ...s }));
@@ -536,7 +539,8 @@ export function taskModal(task, refresh) {
     const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, ...(assigned ? { assignee_id: assigned } : {}) }) };
     if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
-      await api('/api/tasks', { method: 'POST', body });
+      const saved = await api('/api/tasks', { method: 'POST', body });
+      await files.flush(saved.id);
       m.close();
       selected = form.due_date.value;
       toast(task.id ? 'Saved' : 'Task added');

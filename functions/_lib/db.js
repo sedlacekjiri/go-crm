@@ -101,6 +101,13 @@ export function canSeeTask(t, auth) {
 }
 
 // Notes are personal. Notes from before accounts existed belong to the owner.
+// Who may change a task (and its files): its section's editors, or the person it's assigned to.
+export function canEditTask(t, auth) {
+  if (auth.role === 'viewer') return false;
+  if (t.type === 'visit') return auth.canEdit('sales');
+  return auth.canEdit(t.category || 'sales') || t.assignee_id === auth.user.id;
+}
+
 export const ownsNote = (n, auth) => (n.created_by ?? OWNER_ID) === auth.user.id;
 
 // Returns an auth context { user, role, sections, canEdit(section), isTeamAdmin } or an error Response.
@@ -362,6 +369,19 @@ const SCHEMA = [
     updated_at TEXT NOT NULL,
     PRIMARY KEY (account, date)
   )`,
+  // Files attached to a task or a marketing post (scripts, PDFs, images…), kept in the database.
+  `CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    parent_type TEXT NOT NULL,
+    parent_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS files_parent ON files (parent_type, parent_id)`,
   // Notes for the weekly marketing meeting (week = its Monday).
   `CREATE TABLE IF NOT EXISTS report_notes (
     week TEXT PRIMARY KEY,

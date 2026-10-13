@@ -25,6 +25,7 @@ import {
 import { api, isAdmin, state, taskPerson } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
 import { taskModal } from './tasks.js';
+import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { editorHtml, inlineChecklist, mountEditor, progressPill, toggleInList } from '../checklist.js';
 
 // "3 days left" / "today" / "2 days late" pill for a deadline.
@@ -244,7 +245,7 @@ function renderContent(el, ctx) {
 
 function postCard(p) {
   return `<article class="post-card" data-post="${p.id}">
-    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}${progressPill(p)}</div>
+    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}</div>
     <h4>${esc(p.title)}</h4>
     <div class="muted small">${[brandName(p.brand), fmtName(p.format), p.theme].filter(Boolean).map(esc).join(' · ')}</div>
     ${p.caption ? `<p class="caption">${esc(p.caption.length > 180 ? `${p.caption.slice(0, 180)}…` : p.caption)}</p>` : ''}
@@ -282,7 +283,7 @@ function renderIdeas(el, ctx) {
                 ${p.theme ? `<span class="theme">${esc(p.theme)}</span>` : ''}
                 <h4>${esc(p.title)}</h4>
                 ${p.caption ? `<p>${esc(p.caption.length > 140 ? `${p.caption.slice(0, 140)}…` : p.caption)}</p>` : ''}
-                ${readyByPill(p)}${progressPill(p)}
+                ${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}
                 <div class="idea-foot">${channelTags(p.channels)}<span class="muted small">${esc(brandName(p.brand))}</span>
                   ${admin ? `<span class="idea-acts"><button class="btn sm" data-schedule="${p.id}">Schedule</button><button class="icon-btn round sm" data-post="${p.id}" aria-label="Edit">✎</button></span>` : ''}</div>
               </article>`
@@ -350,6 +351,7 @@ export function postModal(post, refresh) {
         <label class="field"><span>Live post (link)</span><input class="input" name="post_url" value="${esc(post.post_url ?? '')}" placeholder="After publishing" /></label>
       </div>
       <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2">${esc(post.notes ?? '')}</textarea></label>
+      ${filesFieldHtml(isAdmin())}
       ${isAdmin() ? `<button class="btn block" type="submit">${post.id ? 'Save' : post.status === 'idea' ? 'Save idea' : 'Add post'}</button>` : ''}
       ${isAdmin() && post.id ? '<button class="btn danger block" type="button" data-remove>Delete</button>' : ''}
     </form>`
@@ -358,6 +360,7 @@ export function postModal(post, refresh) {
   // Checklist: steps to produce the content (template depends on the chosen format).
   const getChecklist = mountEditor(m.el, post.subtasks, () => CHECKLIST_TEMPLATES[form.format.value] ?? CHECKLIST_TEMPLATES.reel);
   let status = post.status ?? 'idea';
+  const files = mountFiles(m.el, 'post', post.id, isAdmin());
   m.el.querySelector('[data-dl-quick]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-n]');
     if (!b) return;
@@ -392,10 +395,11 @@ export function postModal(post, refresh) {
     e.preventDefault();
     const f = formData(form);
     try {
-      await api('/api/posts', {
+      const saved = await api('/api/posts', {
         method: 'POST',
         body: { ...f, id: post.id, status, channels: [...chosen], brand: f.brand || null, format: f.format || null, theme: f.theme || null, subtasks: getChecklist() },
       });
+      await files.flush(saved.id);
       m.close();
       toast(post.id ? 'Saved' : status === 'idea' ? 'Idea saved' : 'Post planned');
       if (f.publish_date) v.selected = f.publish_date;

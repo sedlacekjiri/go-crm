@@ -65,6 +65,9 @@ export async function onRequestDelete({ request, env }) {
   if (auth instanceof Response) return auth;
   const id = new URL(request.url).searchParams.get('id');
   if (!id) return bad('Missing id');
-  await env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM posts WHERE id = ?').bind(id),
+    env.DB.prepare(`DELETE FROM files WHERE parent_type = 'post' AND parent_id = ?`).bind(id),
+  ]);
   return json({ ok: true });
 }

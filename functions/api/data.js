@@ -13,7 +13,7 @@ export async function onRequestGet({ request, env }) {
   const sales = auth.has('sales');
   const marketing = auth.has('marketing');
   const none = db.prepare('SELECT 1 WHERE 0');
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes, files] = await db.batch([
     sales ? db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM activities ORDER BY happened_at DESC') : none,
@@ -29,7 +29,10 @@ export async function onRequestGet({ request, env }) {
     db.prepare(`SELECT * FROM users WHERE active = 1 ORDER BY role = 'owner' DESC, name COLLATE NOCASE`),
     marketing ? db.prepare('SELECT account, date, followers FROM social_stats ORDER BY date') : none,
     marketing ? db.prepare('SELECT week, notes, updated_by, updated_at FROM report_notes') : none,
+    db.prepare('SELECT id, parent_type, parent_id, name, type, size, created_by, created_at FROM files ORDER BY created_at'),
   ]);
+  const visibleTasks = tasks.results.filter((t) => canSeeTask(t, auth));
+  const taskIds = new Set(visibleTasks.map((t) => t.id));
   return json({
     me: auth.user,
     role: auth.role,
@@ -41,7 +44,7 @@ export async function onRequestGet({ request, env }) {
     partners: partners.results,
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
     activities: activities.results,
-    tasks: tasks.results.filter((t) => canSeeTask(t, auth)).map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
+    tasks: visibleTasks.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [], subtasks: parseSubtasks(p.subtasks) })),
     affiliates: affiliates.results,
     payouts: payouts.results,
@@ -51,5 +54,7 @@ export async function onRequestGet({ request, env }) {
     salesInfo: salesInfo.results[0] ?? null,
     social: social.results,
     reportNotes: reportNotes.results,
+    // Attachments (without their contents) of the tasks and posts this person can see.
+    files: files.results.filter((f) => (f.parent_type === 'task' ? taskIds.has(f.parent_id) : marketing)),
   });
 }

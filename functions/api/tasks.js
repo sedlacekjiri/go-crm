@@ -120,6 +120,9 @@ export async function onRequestDelete({ request, env }) {
   const task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first();
   if (!task || !canSeeTask(task, auth)) return bad('Task not found', 404);
   if (!auth.canEdit(task.category || 'sales') && task.created_by !== auth.user.id) return bad('You can’t delete this task', 403);
-  await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id),
+    env.DB.prepare(`DELETE FROM files WHERE parent_type = 'task' AND parent_id = ?`).bind(id),
+  ]);
   return json({ ok: true });
 }

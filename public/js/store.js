@@ -44,6 +44,23 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Upload a file (multipart) – api() only sends JSON.
+export async function uploadFile(path, fields) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  const res = await fetch(path, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: form });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(data?.error || `Upload failed (${res.status})`, res.status);
+  return data;
+}
+
+// Download a protected file as a Blob (links can't carry the login token).
+export async function fetchFile(path) {
+  const res = await fetch(path, { headers: { authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new ApiError((await res.json().catch(() => null))?.error || `Download failed (${res.status})`, res.status);
+  return res.blob();
+}
+
 // ── Loaded data ────────────────────────────────────────────────
 export const state = {
   role: null,
