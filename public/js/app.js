@@ -16,6 +16,7 @@ import * as team from './views/team.js';
 import * as marketing from './views/marketing.js';
 import * as collaborators from './views/collaborators.js';
 import * as report from './views/report.js';
+import * as library from './views/library.js';
 
 // Menu in groups: general on top, then Sales (just for you) and Marketing.
 // `group` is also what colleagues get access to (Team → sections).
@@ -28,6 +29,7 @@ const NAV = [
   { href: '#/goals', key: 'goals', label: 'Goals', icon: ICONS.goals, group: 'Sales' },
   { href: '#/marketing', key: 'marketing', label: 'Marketing', icon: ICONS.marketing, group: 'Marketing' },
   { href: '#/collaborators', key: 'collaborators', label: 'Collaborators', icon: ICONS.collab, group: 'Marketing' },
+  { href: '#/files', key: 'files', label: 'Files', icon: ICONS.files, group: 'Marketing' },
   { href: '#/report', key: 'report', label: 'Report', icon: ICONS.report, group: 'Marketing' },
 ];
 
@@ -59,6 +61,7 @@ const ROUTES = [
   { re: /^\/marketing$/, nav: 'marketing', view: marketing },
   { re: /^\/collaborators$/, nav: 'collaborators', view: collaborators },
   { re: /^\/report$/, nav: 'report', view: report },
+  { re: /^\/files$/, nav: 'files', view: library },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },
@@ -89,6 +92,7 @@ async function render() {
   highlightNav(route.nav);
   const id = ++renderId;
   page.onclick = null; // views that use a page-wide click handler set it again
+  page.ondragenter = page.ondragleave = page.ondragover = page.ondrop = null;
   try {
     await route.view.render(page, { params, query, navigate, refresh, isCurrent: () => id === renderId });
   } catch (e) {

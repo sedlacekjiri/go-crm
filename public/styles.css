@@ -383,6 +383,7 @@ dl.details a { color: var(--accent); text-decoration: none; }
 /* ── Modal (bottom sheet on phones) ────── */
 .modal-wrap { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.4); animation: fadeIn 0.15s ease; }
 .modal { background: var(--surface); border-radius: 20px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 20px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25); }
+.modal.wide { max-width: 780px; padding: 24px 28px; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
 .modal-head h2 { font-size: 17px; font-weight: 700; }
 .modal-close { border: 0; background: var(--surface-2); border-radius: 50%; width: 30px; height: 30px; font-size: 18px; line-height: 1; color: var(--text-2); flex-shrink: 0; }
@@ -1013,3 +1014,26 @@ button.file-open:hover .fname { text-decoration: underline; }
 .file-add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .file-text { white-space: pre-wrap; font: 13px/1.55 inherit; font-family: inherit; background: var(--surface-2); border-radius: 12px; padding: 14px; max-height: 55vh; overflow: auto; margin: 0 0 12px; }
 .clip { color: var(--text-3); font-size: 12px; white-space: nowrap; }
+
+/* ── Files page ─────────── */
+.folder-chips { flex-wrap: wrap; overflow: visible; margin-bottom: 12px; }
+.folder-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+.folder-head h2 { font-size: 16px; font-weight: 700; }
+.file-card { padding: 6px 14px; }
+.lib-list { list-style: none; margin: 0; padding: 0; }
+.lib-list li { display: flex; align-items: center; gap: 10px; padding: 10px 0; min-width: 0; }
+.lib-list li + li { border-top: 1px solid var(--border); }
+.lib-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; border: 0; background: none; padding: 0; text-align: left; color: var(--text); cursor: pointer; font: inherit; }
+.lib-main:hover .fname { text-decoration: underline; }
+.lib-icon { font-size: 22px; width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); border-radius: 10px; flex-shrink: 0; }
+.lib-text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.lib-text .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drop-hint { position: fixed; inset: 12px; border: 3px dashed var(--accent); border-radius: 20px; background: color-mix(in srgb, var(--accent) 8%, transparent); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--accent); pointer-events: none; z-index: 60; }
+.drop-hint[hidden] { display: none !important; }
+label.btn.file-add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+@media (max-width: 860px) {
+  .lib-src { display: none; }
+}
+@media (max-width: 860px) {
+  .modal.wide { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); }
+}

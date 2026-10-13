@@ -356,6 +356,7 @@ export function postModal(post, refresh) {
       ${isAdmin() && post.id ? '<button class="btn danger block" type="button" data-remove>Delete</button>' : ''}
     </form>`
   );
+  m.el.querySelector('.modal').classList.add('wide');
   const form = m.el.querySelector('form');
   // Checklist: steps to produce the content (template depends on the chosen format).
   const getChecklist = mountEditor(m.el, post.subtasks, () => CHECKLIST_TEMPLATES[form.format.value] ?? CHECKLIST_TEMPLATES.reel);

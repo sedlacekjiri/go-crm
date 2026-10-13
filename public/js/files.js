@@ -9,7 +9,7 @@ const TEXT_EXT = /\.(txt|md|csv|srt|vtt|json)$/i;
 export const filesOf = (type, id) => (id ? (state.files ?? []).filter((f) => f.parent_type === type && f.parent_id === id) : []);
 export const fileCount = (type, id) => filesOf(type, id).length;
 export const sizeText = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-const icon = (f) => (/^image\//.test(f.type) ? '🖼' : /pdf/.test(f.type) ? '📕' : /^text\//.test(f.type) || TEXT_EXT.test(f.name) ? '📝' : /^(video|audio)\//.test(f.type) ? '🎬' : '📄');
+export const fileIcon = (f) => (/^image\//.test(f.type) ? '🖼' : /pdf/.test(f.type) ? '📕' : /^text\//.test(f.type) || TEXT_EXT.test(f.name) ? '📝' : /^(video|audio)\//.test(f.type) ? '🎬' : '📄');
 
 export const filesFieldHtml = (canEdit) => `
   <div class="field"><span>Files</span>
@@ -33,11 +33,11 @@ export function mountFiles(root, type, id, canEdit) {
     listEl.innerHTML =
       [
         ...saved.map(
-          (f) => `<li><button type="button" class="file-open" data-open="${f.id}">${icon(f)} <span class="fname">${esc(f.name)}</span></button><span class="muted small">${sizeText(f.size)}</span>
+          (f) => `<li><button type="button" class="file-open" data-open="${f.id}">${fileIcon(f)} <span class="fname">${esc(f.name)}</span></button><span class="muted small">${sizeText(f.size)}</span>
             ${canEdit ? `<button type="button" class="link-btn muted" data-del="${f.id}" aria-label="Remove ${esc(f.name)}">×</button>` : ''}</li>`
         ),
         ...pending.map(
-          (f, i) => `<li><span class="file-open">${icon(f)} <span class="fname">${esc(f.name)}</span></span><span class="muted small">added when you save</span>
+          (f, i) => `<li><span class="file-open">${fileIcon(f)} <span class="fname">${esc(f.name)}</span></span><span class="muted small">added when you save</span>
             <button type="button" class="link-btn muted" data-unpend="${i}" aria-label="Remove">×</button></li>`
         ),
       ].join('') || (canEdit ? '' : '<li class="muted small">No files</li>');
@@ -112,6 +112,7 @@ export async function openFile(f) {
       const text = await blob.text();
       const m = openModal(f.name, `<pre class="file-text">${esc(text)}</pre>
         <div class="controls"><button type="button" class="btn" data-copy>Copy text</button><button type="button" class="btn secondary" data-download>Download</button></div>`);
+      m.el.querySelector('.modal').classList.add('wide');
       m.el.querySelector('[data-copy]').addEventListener('click', () => copyText(text));
       m.el.querySelector('[data-download]').addEventListener('click', () => download(blob, f.name));
     } else {

@@ -468,7 +468,7 @@ export function taskModal(task, refresh) {
               { empty: '–' }
             )}</select></label>`
       }
-      <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2">${esc(task.notes ?? '')}</textarea></label>
+      <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="4">${esc(task.notes ?? '')}</textarea></label>
       ${filesFieldHtml(isAdmin())}
       ${isVisit ? '' : `<div class="field"><span>Subtasks</span><ul class="sub-edit" data-sub-edit></ul>
         <div class="sub-add"><input class="input" data-sub-new placeholder="Add a step and press Enter" autocomplete="off" /><button class="btn secondary sm" type="button" data-sub-new-btn>Add</button></div></div>`}
@@ -476,6 +476,7 @@ export function taskModal(task, refresh) {
       ${task.id ? `<button class="btn danger block" type="button" data-remove>${isVisit ? 'Remove from plan' : 'Delete task'}</button>` : ''}
     </form>`
   );
+  m.el.querySelector('.modal').classList.add('wide');
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
   const files = mountFiles(m.el, 'task', task.id, isAdmin());

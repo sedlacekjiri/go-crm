@@ -382,6 +382,12 @@ const SCHEMA = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS files_parent ON files (parent_type, parent_id)`,
+  // Folders on the Files page (one level, Marketing).
+  `CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   // Notes for the weekly marketing meeting (week = its Monday).
   `CREATE TABLE IF NOT EXISTS report_notes (
     week TEXT PRIMARY KEY,
@@ -420,6 +426,7 @@ const MIGRATIONS = [
   `ALTER TABLE reviews ADD COLUMN updated_at TEXT`,
   `ALTER TABLE reviews ADD COLUMN reply_text TEXT`,
   `ALTER TABLE reviews ADD COLUMN reply_at TEXT`,
+  `ALTER TABLE files ADD COLUMN folder_id TEXT`, // Files page folder (null = not in a folder)
 ];
 
 let schemaReady = false;
