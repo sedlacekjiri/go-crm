@@ -3,7 +3,8 @@
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
-import { api, can, isAdmin, isTeamAdmin, state, taskPerson, userById } from '../store.js';
+import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
+import { api, assigneeId, can, isAdmin, state, taskPerson } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -16,12 +17,13 @@ let mode = 'week';
 let category = ''; // '' | 'sales' | 'marketing'
 let who = ''; // '' everyone | 'me' | 'none' (unassigned) | a user id
 
-// Whose task is it: the assignee, or – when nobody is assigned – whoever created it (old tasks: the owner).
-const ownerOf = (t) => t.assignee_id ?? t.created_by ?? 'owner';
+// Filter by who the task is assigned to (visits are always the owner's).
 const matchesWho = (t) => {
   if (!who) return true;
-  if (who === 'none') return t.type !== 'visit' && !t.assignee_id;
-  return ownerOf(t) === (who === 'me' ? state.me?.id : who);
+  if (t.type === 'visit') return who === 'me' ? state.me?.id === 'owner' : who === 'owner';
+  if (who === 'none') return !assigneeId(t);
+  const id = who === 'me' ? state.me?.id : who;
+  return assigneeId(t) === id || (t.subtasks ?? []).some((s) => s.assignee_id === id && !s.done);
 };
 const expanded = new Set(); // tasks whose checklist is open
 let refocus = null; // task id whose "add subtask" input should get focus after a redraw
@@ -108,7 +110,7 @@ export function render(page, ctx) {
         .map(
           (st) => `<li class="${st.done ? 'done' : ''}">
             ${admin ? `<button type="button" class="tick sm ${st.done ? 'on' : ''}" data-sub-toggle="${task.id}" data-sub="${esc(st.id)}" aria-label="${st.done ? 'Mark not done' : 'Mark done'}">${st.done ? '✓' : ''}</button>` : `<span class="tick sm ${st.done ? 'on' : ''}">${st.done ? '✓' : ''}</span>`}
-            <span class="st-title">${esc(st.title)}</span>
+            <span class="st-title">${esc(st.title)}</span>${subPerson(st)}
             ${admin ? `<button type="button" class="link-btn muted" data-sub-del="${task.id}" data-sub="${esc(st.id)}" aria-label="Remove subtask">×</button>` : ''}
           </li>`
         )
@@ -121,7 +123,7 @@ export function render(page, ctx) {
       <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
       <div class="body">
         <button type="button" class="title as-link" data-post="${p.id}">${esc(p.title)}</button>
-        <div class="meta">${!category ? categoryTag('marketing') : ''}${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}</div>
+        <div class="meta">${!category ? categoryTag('marketing') : ''}${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<b class="late">${shortDate(p.publish_date)}</b>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${taskPerson(p) ? `<span class="assignee" title="${esc(taskPerson(p).name)}">${avatar(taskPerson(p), 18)}${esc(taskPerson(p).name.split(' ')[0])}</span>` : ''}${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}</div>
       </div>
       ${isAdmin() && p.status !== 'published' ? `<div class="acts">${readyBy || ['idea', 'in_progress'].includes(p.status) ? `<button class="btn secondary sm" data-ready="${p.id}">Ready ✓</button>` : `<button class="btn secondary sm" data-published="${p.id}">Mark published</button>`}</div>` : ''}
     </li>`;
@@ -442,17 +444,13 @@ export function planVisits(date, refresh, preselect = []) {
 export function taskModal(task, refresh) {
   const isVisit = task.type === 'visit';
   const partner = state.partners.find((p) => p.id === task.partner_id);
-  // Whose task it is now: the assignee, else whoever created it; a new task starts as mine.
-  let assigned = task.assignee_id ?? (task.id ? task.created_by ?? 'owner' : state.me?.id) ?? null;
-  if (!userById(assigned)) assigned = null;
+  // A new task starts as mine.
   const m = openModal(
     task.id ? (isVisit ? `Visit – ${partner?.name ?? ''}` : 'Edit task') : 'New task',
     `<form>
       ${isVisit ? '' : `<label class="field"><span>What to do *</span><input class="input" name="title" required value="${esc(task.title ?? '')}" placeholder="Print flyers, prepare summer campaign…" /></label>
       <div class="field"><span>Category</span><div class="chips" data-category>${TASK_CATEGORIES.filter((c) => can(c.value) || c.value === task.category).map((c) => `<button type="button" data-v="${c.value}" aria-pressed="${(task.category || defaultCategory()) === c.value}"><i class="cdot cat-dot-${c.value}"></i>${c.label}</button>`).join('')}</div></div>
-      <div class="field"><span>Assigned to</span><div class="chips wrap-chips people" data-assignee>${state.users
-        .map((u) => `<button type="button" data-v="${u.id}" aria-pressed="${u.id === assigned}">${avatar(u, 22)}${esc(u.id === state.me?.id ? `${u.name.split(' ')[0]} (me)` : u.name.split(' ')[0])}</button>`)
-        .join('')}</div>${state.users.length < 2 ? `<small>Only you so far${isTeamAdmin() ? ' – add colleagues in Team (sidebar) to hand tasks over' : ''}.</small>` : ''}</div>`}
+      ${assigneeFieldHtml(task.id ? assigneeId(task) : task.assignee_id ?? state.me?.id)}`}
       <div class="form-grid${isVisit ? '' : ' three'}">
         ${isVisit ? '' : `<label class="field"><span>Start (optional)</span><input class="input" type="date" name="start_date" value="${esc(task.start_date ?? '')}" /><small>For longer tasks</small></label>`}
         <label class="field"><span>${isVisit ? 'Visit on' : 'Deadline / date'}</span><input class="input" type="date" name="due_date" required value="${esc(task.due_date ?? today())}" /></label>
@@ -489,12 +487,16 @@ export function taskModal(task, refresh) {
     subList.innerHTML = subs
       .map(
         (s, i) => `<li><input type="checkbox" data-i="${i}" ${s.done ? 'checked' : ''} aria-label="Done" />
-          <input class="input" data-t="${i}" value="${esc(s.title)}" /><button type="button" class="link-btn muted" data-x="${i}" aria-label="Remove">×</button></li>`
+          <input class="input" data-t="${i}" value="${esc(s.title)}" />${subAssigneeSelect(i, s.assignee_id)}<button type="button" class="link-btn muted" data-x="${i}" aria-label="Remove">×</button></li>`
       )
       .join('');
   };
   drawSubs();
   subList?.addEventListener('change', (e) => {
+    if (e.target.dataset.w !== undefined) {
+      subs[e.target.dataset.w].assignee_id = e.target.value || undefined;
+      return;
+    }
     const i = e.target.dataset.i ?? e.target.dataset.t;
     if (i === undefined) return;
     if (e.target.dataset.i !== undefined) subs[i].done = e.target.checked;
@@ -528,16 +530,11 @@ export function taskModal(task, refresh) {
     cat = b.dataset.v;
     m.el.querySelectorAll('[data-category] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
   });
-  m.el.querySelector('[data-assignee]')?.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-v]');
-    if (!b) return;
-    assigned = b.dataset.v;
-    m.el.querySelectorAll('[data-assignee] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  });
+  const assignee = mountAssignee(m.el, task.id ? assigneeId(task) : task.assignee_id ?? state.me?.id);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(form);
-    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, ...(assigned ? { assignee_id: assigned } : {}) }) };
+    const body = { title: f.title, start_date: f.start_date, due_date: f.due_date, due_time: f.due_time, partner_id: f.partner_id, notes: f.notes, type: task.type, id: task.id, ...(isVisit ? {} : { category: cat, subtasks: subs, assignee_id: assignee() }) };
     if (body.start_date && body.start_date > body.due_date) return toast('Start must be before the deadline', 'error');
     try {
       const saved = await api('/api/tasks', { method: 'POST', body });

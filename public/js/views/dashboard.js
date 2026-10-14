@@ -20,7 +20,7 @@ import {
   today,
   totals,
 } from '../lib.js';
-import { can, currency, isAdmin, loadSales, state, taskPerson } from '../store.js';
+import { can, currency, isAdmin, loadSales, state, assigneeId, taskPerson } from '../store.js';
 import { dateTime, esc, money, monthLabel, num, pct, shortDate } from '../util.js';
 
 export async function render(page, { isCurrent }) {
@@ -48,7 +48,7 @@ export async function render(page, { isCurrent }) {
   const todayItems = [
     ...day.visits.map((v) => ({ title: v.partner.name, sub: `Visit · ${v.partner.area ?? ''}`, href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
     ...day.followUps.map((p) => ({ title: p.name, sub: `Follow-up · ${STAGES.find((s) => s.value === p.stage)?.label}`, href: `#/partner/${p.id}`, done: false, pill: followUpPill(p.next_follow_up) })),
-    ...day.posts.map((x) => ({ title: x.title, sub: ['Post', x.publish_time, x.channels.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ')].filter(Boolean).join(' · '), href: '#/marketing', done: x.status === 'published', pill: x.status === 'published' ? '<span class="pill good">Published</span>' : '<span class="pill">Post</span>' })),
+    ...day.posts.map((x) => ({ title: x.title, sub: ['Post', x.publish_time, x.channels.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ')].filter(Boolean).join(' · '), href: '#/marketing', done: x.status === 'published', pill: x.status === 'published' ? '<span class="pill good">Published</span>' : '<span class="pill">Post</span>', who: x })),
     ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, href: '#/tasks', done: false, pill: '', who: x })),
     ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time, x.partner?.name, x.subtasks?.length ? `${x.subtasks.filter((st) => st.done).length}/${x.subtasks.length} subtasks` : null].filter(Boolean).join(' · '), href: '#/tasks', done: x.done, pill: x.done ? '<span class="pill good">Done</span>' : '', who: x })),
   ];
@@ -160,7 +160,7 @@ export async function render(page, { isCurrent }) {
 function renderLite(page) {
   const t = today();
   const me = state.me;
-  const mine = state.tasks.filter((x) => !x.done && x.type !== 'visit' && (x.assignee_id ?? x.created_by) === me?.id);
+  const mine = state.tasks.filter((x) => !x.done && x.type !== 'visit' && (assigneeId(x) === me?.id || (x.subtasks ?? []).some((s) => s.assignee_id === me?.id && !s.done)));
   const day = agenda(t, state);
   const late = overdue(t, state);
   const week = can('marketing') ? postWeekStats(state.posts ?? [], t) : null;
@@ -168,7 +168,7 @@ function renderLite(page) {
   const items = [
     ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time].filter(Boolean).join(' · '), done: x.done, who: x })),
     ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, done: false, who: x })),
-    ...day.posts.map((x) => ({ title: x.title, sub: `Post · ${x.channels.join(', ')}`, done: x.status === 'published' })),
+    ...day.posts.map((x) => ({ title: x.title, sub: `Post · ${x.channels.join(', ')}`, done: x.status === 'published', who: x })),
     ...day.readyBy.map((x) => ({ title: x.title, sub: 'Content deadline', done: false })),
   ];
   const lateCount = late.tasks.length + late.posts.length;

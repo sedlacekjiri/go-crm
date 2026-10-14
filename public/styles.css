@@ -1038,3 +1038,5 @@ label.btn.file-add input { position: absolute; inset: 0; opacity: 0; cursor: poi
   .modal { padding: 20px 20px calc(20px + env(safe-area-inset-bottom)); }
   .modal.narrow { max-width: none; }
 }
+.sub-edit .sub-who { width: 130px; flex: 0 0 130px; padding-top: 6px; padding-bottom: 6px; font-size: 13px; }
+.subtasks li .who, .cl-inline li .who { margin-left: 4px; }

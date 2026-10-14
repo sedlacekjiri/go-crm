@@ -98,7 +98,7 @@ export async function render(page, ctx) {
         <div class="card-head"><h2>Done this week</h2><span class="sub">${r.done.length} thing${r.done.length === 1 ? '' : 's'}</span></div>
         ${list(
           r.done,
-          (x) => `<span class="rep-date">${esc(shortDate(x.date))}</span><span class="rep-kind k-${x.kind}">${x.kind === 'post' ? 'Post' : x.kind === 'visit' ? 'Visit' : 'Task'}</span><span class="rep-title">${esc(x.title)}${x.kind === 'visit' ? ' <span class="muted small">hotel visit</span>' : ''}</span>${x.kind === 'post' ? `<span class="rep-tags">${channelTags(x.ref.channels)}</span>` : x.kind === 'task' ? person(x.ref) : ''}`,
+          (x) => `<span class="rep-date">${esc(shortDate(x.date))}</span><span class="rep-kind k-${x.kind}">${x.kind === 'post' ? 'Post' : x.kind === 'visit' ? 'Visit' : 'Task'}</span><span class="rep-title">${esc(x.title)}${x.kind === 'visit' ? ' <span class="muted small">hotel visit</span>' : ''}</span>${x.kind === 'post' ? `<span class="rep-tags">${channelTags(x.ref.channels)}</span>` : ''}${x.kind !== 'visit' ? person(x.ref) : ''}`,
           'Nothing finished yet this week.'
         )}
       </section>
@@ -207,7 +207,7 @@ function asText(r, notes) {
   lines.push(`• ${ch}`);
   lines.push('', `DONE THIS WEEK (${r.done.length})`);
   for (const x of r.done) {
-    const who = x.kind === 'task' && taskPerson(x.ref) ? ` – ${taskPerson(x.ref).name.split(' ')[0]}` : '';
+    const who = x.kind !== 'visit' && taskPerson(x.ref) ? ` – ${taskPerson(x.ref).name.split(' ')[0]}` : '';
     const extra = x.kind === 'post' ? ` [${(x.ref.channels ?? []).map((c) => SOCIAL_LABEL[c] ?? c).join(', ')}] – ${brandName(x.ref.brand)}` : '';
     lines.push(`• ${shortDate(x.date)} ${x.kind === 'post' ? 'Post' : x.kind === 'visit' ? 'Visit' : 'Task'}: ${x.title}${extra}${who}`);
   }

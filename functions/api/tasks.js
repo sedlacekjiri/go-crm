@@ -8,7 +8,7 @@
 //   GET  ?done=1&from=YYYY-MM-DD               finished tasks, newest first (history; everyone logged in)
 //   DELETE ?id=…
 
-import { authorize, bad, canSeeTask, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, canSeeTask, checkSubtaskPeople, cleanSubtasks, hasSubtaskFor, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const TYPES = ['todo', 'visit'];
 const CATEGORIES = ['sales', 'marketing'];
@@ -78,6 +78,8 @@ export async function onRequestPost({ request, env }) {
   if ('subtasks' in b) {
     const list = cleanSubtasks(b.subtasks);
     if (list === undefined) return bad('Invalid subtasks');
+    const problem = await checkSubtaskPeople(db, list);
+    if (problem) return bad(problem);
     row.subtasks = list;
   }
   if ('done' in b) {
@@ -90,7 +92,8 @@ export async function onRequestPost({ request, env }) {
     row.assignee_id = null; // visits are yours
   }
   // You can only file tasks under sections you work in (unless it's assigned to you to do).
-  if (!auth.canEdit(row.category) && !(existing && existing.assignee_id === auth.user.id && existing.category === row.category)) {
+  const workingOnIt = existing && (existing.assignee_id === auth.user.id || hasSubtaskFor(existing, auth.user.id));
+  if (!auth.canEdit(row.category) && !(workingOnIt && existing.category === row.category)) {
     return bad(`You can’t add or move tasks to ${row.category === 'sales' ? 'Sales' : 'Marketing'}`, 403);
   }
   if (row.start_date && row.start_date >= row.due_date) row.start_date = null; // a one-day task

@@ -97,7 +97,21 @@ async function userFromToken(env, token) {
 export function canSeeTask(t, auth) {
   if (t.type === 'visit') return auth.has('sales');
   if (auth.has(t.category || 'sales')) return true;
-  return t.assignee_id === auth.user.id || t.created_by === auth.user.id;
+  return t.assignee_id === auth.user.id || t.created_by === auth.user.id || hasSubtaskFor(t, auth.user.id);
+}
+
+// Someone is responsible for one of the task's subtasks.
+export function hasSubtaskFor(t, userId) {
+  const list = typeof t.subtasks === 'string' ? parseSubtasks(t.subtasks) : t.subtasks ?? [];
+  return list.some((s) => s.assignee_id === userId);
+}
+
+// The people subtasks are assigned to must be active team members. Returns an error text or null.
+export async function checkSubtaskPeople(db, json) {
+  const ids = [...new Set(parseSubtasks(json).map((s) => s.assignee_id).filter(Boolean))];
+  if (!ids.length) return null;
+  const { results } = await db.prepare(`SELECT id FROM users WHERE active = 1 AND id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).all();
+  return results.length === ids.length ? null : 'A subtask is assigned to someone who isn’t in the team';
 }
 
 // Notes are personal. Notes from before accounts existed belong to the owner.
@@ -105,7 +119,7 @@ export function canSeeTask(t, auth) {
 export function canEditTask(t, auth) {
   if (auth.role === 'viewer') return false;
   if (t.type === 'visit') return auth.canEdit('sales');
-  return auth.canEdit(t.category || 'sales') || t.assignee_id === auth.user.id;
+  return auth.canEdit(t.category || 'sales') || t.assignee_id === auth.user.id || hasSubtaskFor(t, auth.user.id);
 }
 
 export const ownsNote = (n, auth) => (n.created_by ?? OWNER_ID) === auth.user.id;
@@ -427,6 +441,7 @@ const MIGRATIONS = [
   `ALTER TABLE reviews ADD COLUMN reply_text TEXT`,
   `ALTER TABLE reviews ADD COLUMN reply_at TEXT`,
   `ALTER TABLE files ADD COLUMN folder_id TEXT`, // Files page folder (null = not in a folder)
+  `ALTER TABLE posts ADD COLUMN assignee_id TEXT`, // who makes the post
 ];
 
 let schemaReady = false;
@@ -472,7 +487,7 @@ export const uuid = () => crypto.randomUUID();
 export function cleanSubtasks(list) {
   if (!Array.isArray(list)) return undefined;
   const out = list
-    .map((s) => ({ id: str(s?.id, 64) || uuid(), title: str(s?.title, 200), done: !!s?.done }))
+    .map((s) => ({ id: str(s?.id, 64) || uuid(), title: str(s?.title, 200), done: !!s?.done, ...(str(s?.assignee_id, 64) ? { assignee_id: str(s.assignee_id, 64) } : {}) }))
     .filter((s) => s.title)
     .slice(0, 50);
   return out.length ? JSON.stringify(out) : null;

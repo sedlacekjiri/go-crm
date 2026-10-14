@@ -1,6 +1,7 @@
 // Checklist (subtasks) editor used in the post window, and the inline tick list on post cards.
 import { subtaskProgress } from './lib.js';
 import { esc } from './util.js';
+import { subAssigneeSelect, subPerson } from './people.js';
 
 export const progressPill = (item) => {
   const { done, total } = subtaskProgress(item);
@@ -17,7 +18,7 @@ export const inlineChecklist = (item, canEdit) =>
             canEdit
               ? `<button type="button" class="tick sm ${st.done ? 'on' : ''}" data-cl-toggle="${esc(item.id)}" data-sub="${esc(st.id)}" aria-label="${st.done ? 'Mark not done' : 'Mark done'}">${st.done ? '✓' : ''}</button>`
               : `<span class="tick sm ${st.done ? 'on' : ''}">${st.done ? '✓' : ''}</span>`
-          }<span>${esc(st.title)}</span></li>`
+          }<span>${esc(st.title)}</span>${subPerson(st)}</li>`
         )
         .join('')}</ul>`
     : '';
@@ -39,7 +40,7 @@ export function mountEditor(root, initial, getTemplate) {
     list.innerHTML = items
       .map(
         (s, i) => `<li><input type="checkbox" data-i="${i}" ${s.done ? 'checked' : ''} aria-label="Done" />
-          <input class="input" data-t="${i}" value="${esc(s.title)}" /><button type="button" class="link-btn muted" data-x="${i}" aria-label="Remove">×</button></li>`
+          <input class="input" data-t="${i}" value="${esc(s.title)}" />${subAssigneeSelect(i, s.assignee_id)}<button type="button" class="link-btn muted" data-x="${i}" aria-label="Remove">×</button></li>`
       )
       .join('');
   };
@@ -47,6 +48,7 @@ export function mountEditor(root, initial, getTemplate) {
   list.addEventListener('change', (e) => {
     if (e.target.dataset.i !== undefined) items[e.target.dataset.i].done = e.target.checked;
     if (e.target.dataset.t !== undefined) items[e.target.dataset.t].title = e.target.value;
+    if (e.target.dataset.w !== undefined) items[e.target.dataset.w].assignee_id = e.target.value || undefined;
   });
   list.addEventListener('click', (e) => {
     const x = e.target.closest('[data-x]');

@@ -110,6 +110,7 @@ export async function onRequestDelete({ request, env }) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(id),
     env.DB.prepare('UPDATE tasks SET assignee_id = NULL WHERE assignee_id = ?').bind(id),
+    env.DB.prepare('UPDATE posts SET assignee_id = NULL WHERE assignee_id = ?').bind(id),
     env.DB.prepare('DELETE FROM notes WHERE created_by = ?').bind(id),
     env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id),
   ]);

@@ -1,9 +1,9 @@
 // /api/posts (admin only) — marketing content: ideas and planned / published posts.
 //   POST   { id?, title, brand, channels: [...], format, theme, status, publish_date, publish_time, deadline,
-//            caption, media_url, post_url, notes, subtasks: [{ title, done }] }   create, or update only the fields sent
+//            caption, media_url, post_url, notes, assignee_id, subtasks: [{ title, done }] }   create, or update only the fields sent
 //   DELETE ?id=…
 
-import { authorize, bad, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, checkSubtaskPeople, cleanSubtasks, isDate, json, now, oneOf, parseSubtasks, readJson, str, uuid } from '../_lib/db.js';
 
 const CHANNELS = ['facebook', 'instagram', 'tiktok', 'google', 'youtube'];
 const FORMATS = ['reel', 'post', 'carousel', 'story'];
@@ -40,7 +40,13 @@ export async function onRequestPost({ request, env }) {
   if ('subtasks' in b) {
     const list = cleanSubtasks(b.subtasks);
     if (list === undefined) return bad('Invalid subtasks');
+    const problem = await checkSubtaskPeople(db, list);
+    if (problem) return bad(problem);
     row.subtasks = list;
+  }
+  if ('assignee_id' in b) {
+    row.assignee_id = str(b.assignee_id, 64);
+    if (row.assignee_id && !(await db.prepare('SELECT 1 FROM users WHERE id = ? AND active = 1').bind(row.assignee_id).first())) return bad('That person isn’t in the team');
   }
   if (!row.title) return bad('Give it a short title');
   // Remember when it actually went live (the planned publish_date can be different).

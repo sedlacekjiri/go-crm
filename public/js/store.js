@@ -85,8 +85,15 @@ export const isAdmin = () => !!state.role && state.role !== 'viewer';
 export const can = (section) => (state.sections ?? []).includes(section);
 export const isTeamAdmin = () => state.role === 'owner' || state.role === 'admin';
 export const userById = (id) => (state.users ?? []).find((u) => u.id === id) ?? null;
-// Whose task it is: the assignee, or – when nobody is assigned – whoever created it (old tasks: the owner).
-export const taskPerson = (t) => (t && t.type !== 'visit' ? userById(t.assignee_id ?? t.created_by ?? 'owner') : null);
+// Who a task or post is assigned to. Only an explicit assignment counts – except for tasks from
+// before team accounts existed (no creator recorded), which were all the owner's.
+export const assigneeId = (t) => {
+  if (!t || t.type === 'visit') return null;
+  if (t.assignee_id) return t.assignee_id;
+  const isOldTask = 'due_date' in t && !t.created_by;
+  return isOldTask ? 'owner' : null;
+};
+export const taskPerson = (t) => userById(assigneeId(t));
 
 export async function login(email, password, remember) {
   token = null;
