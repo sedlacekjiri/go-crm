@@ -1,6 +1,7 @@
 // Your profile (photo, name, e-mail, password) and – for the owner/admins – the team:
 // who can log in and which sections (Sales / Marketing) each person sees.
 import { avatar, emptyBox, pageHeader, roleLabel } from '../components.js';
+import { shiftDate, today } from '../lib.js';
 import { api, isTeamAdmin, loadData, state } from '../store.js';
 import { esc, formData, fullDate, openModal, toast } from '../util.js';
 
@@ -13,6 +14,18 @@ async function resizePhoto(file) {
   const canvas = Object.assign(document.createElement('canvas'), { width: 256, height: 256 });
   canvas.getContext('2d').drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, 256, 256);
   return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+// "just now" / "35 min ago" / "today 09:12" / "yesterday" / "3 Oct 2026"
+function lastActive(iso) {
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (mins < 20) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const d = new Date(iso);
+  const day = today(d);
+  if (day === today()) return `today ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  if (day === shiftDate(today(), -1)) return 'yesterday';
+  return fullDate(day);
 }
 
 export function profileModal(onSaved) {
@@ -99,7 +112,7 @@ export async function render(page, ctx) {
         .map(
           (u) => `<li class="${u.active ? '' : 'inactive'}" data-user="${u.id}">
             ${avatar(u, 40)}
-            <div class="body"><b>${esc(u.name)}</b>${u.active ? '' : ' <span class="pill">deactivated</span>'}<div class="muted small">${esc(u.email ?? '–')}${u.last_login ? ` · last login ${esc(fullDate(u.last_login.slice(0, 10)))}` : ' · never logged in'}</div></div>
+            <div class="body"><b>${esc(u.name)}</b>${u.active ? '' : ' <span class="pill">deactivated</span>'}<div class="muted small">${esc(u.email ?? '–')}${u.last_login ? ` · active ${esc(lastActive(u.last_login))}` : ' · hasn’t logged in yet'}</div></div>
             <span class="role-pill ${u.role}">${esc(roleLabel(u.role))}</span>
             <span class="sections">${u.sections.map((s) => `<span class="cat cat-${s}">${SECTION_LABELS[s]}</span>`).join('') || '<span class="muted small">no access</span>'}</span>
             ${u.role === 'owner' ? '<span class="muted small" style="width:48px">you</span>' : '<button class="btn secondary sm" data-edit>Edit</button>'}

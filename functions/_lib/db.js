@@ -140,6 +140,11 @@ export async function authorize(request, env, { write = false, section = null, t
     await new Promise((r) => setTimeout(r, 400)); // slow down guessing
     return bad('Please log in again', 401);
   }
+  // "Last active" on the Team page: people stay logged in for months, so record use, not logins
+  // (at most once every 15 minutes, to keep writes down).
+  if (user.id !== 'viewer' && (!user.last_login || Date.now() - Date.parse(user.last_login) > 15 * 60 * 1000)) {
+    await env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?').bind(now(), user.id).run();
+  }
   const pub = publicUser(user);
   const ctx = {
     user: pub,
