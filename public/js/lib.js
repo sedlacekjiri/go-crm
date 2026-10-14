@@ -853,7 +853,8 @@ export function sheetBool(v) {
 // "€ 1,650.00" / "792" / "€ -" → number or null.
 export function sheetMoney(v) {
   if (typeof v === 'number') return v;
-  const s = String(v ?? '').replace(/[€\s]/g, '').replace(/,(?=\d{3}\b)/g, '');
+  // Keep only digits, separators and the minus sign (drops €, ISK, spaces, mis-decoded symbols).
+  const s = String(v ?? '').replace(/[^\d.,-]/g, '').replace(/,(?=\d{3}\b)/g, '');
   if (!s || s === '-') return null;
   const n = Number(s.replace(',', '.'));
   return Number.isFinite(n) ? n : null;
@@ -908,13 +909,18 @@ export function parseCollabSheet(rows, { brand, year }) {
   const items = [];
   let skipped = 0;
   const join = (v, sep) => String(v ?? '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean).join(sep);
+  // Which column is which, from the header row. Some sheets lost the "Nafn" header (it reads
+  // "2" or is empty) – then the first column holds the names.
+  const headers = rows.length ? Object.keys(rows[0]) : [];
+  const colOf = new Map();
+  for (const header of headers) {
+    const col = COLLAB_COLUMNS.find(([, re]) => re.test(header.trim().toLowerCase()))?.[0];
+    if (col && ![...colOf.values()].includes(col)) colOf.set(header, col);
+  }
+  if (headers.length && ![...colOf.values()].includes('name') && !colOf.has(headers[0])) colOf.set(headers[0], 'name');
   for (const row of rows) {
     const get = {};
-    for (const [header, value] of Object.entries(row)) {
-      const h = header.trim().toLowerCase();
-      const col = COLLAB_COLUMNS.find(([, re]) => re.test(h))?.[0];
-      if (col && get[col] === undefined) get[col] = value;
-    }
+    for (const [header, col] of colOf) get[col] = row[header];
     const name = join(get.name, ' & ');
     if (!name) {
       skipped++;

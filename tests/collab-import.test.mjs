@@ -7,6 +7,16 @@ const HEADERS = ['Nafn', 'Social Media', 'Email', 'Follower count', 'Hvernig efn
 const row = (...v) => Object.fromEntries(HEADERS.map((h, i) => [h, v[i] ?? '']));
 
 describe('collaborators spreadsheet import', () => {
+  it('uses the first column for names when the Nafn header is missing', () => {
+    const rows = [
+      { 2: 'Teddy Lauren', 'Social Media': '@teddy', 'Bíltegund': 'Suzuki Jimny', 'Pick- Drop off': '2 mars - 11 mars', Verð: '€ 450.00' },
+      { 2: '', 'Social Media': '', 'Bíltegund': '', 'Pick- Drop off': '', Verð: '€ 20,815.97' }, // totals row
+    ];
+    const { items, skipped } = parseCollabSheet(rows, { brand: 'car', year: 2026 });
+    assert.equal(skipped, 1);
+    assert.deepEqual([items[0].name, items[0].vehicle, items[0].pickup_date, items[0].price_eur], ['Teddy Lauren', 'Suzuki Jimny', '2026-03-02', 450]);
+  });
+
   it('reads sheet names', () => {
     assert.deepEqual(sheetInfo('Campers 26'), { brand: 'camper', year: 2026 });
     assert.deepEqual(sheetInfo('Car Rental 25'), { brand: 'car', year: 2025 });
