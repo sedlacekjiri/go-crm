@@ -50,6 +50,9 @@ export async function onRequestPost({ request, env }) {
     const row = await db.prepare('SELECT * FROM users WHERE lower(email) = ? AND active = 1').bind(email).first();
     if (row?.role === 'owner') user = safeEqual(password, env.ADMIN_PASSWORD) ? row : null;
     else if (row && (await checkPassword(password, row.password_hash))) user = row;
+    // The owner's password is ADMIN_PASSWORD; it works with any e-mail no colleague uses
+    // (e.g. before the owner has saved their e-mail in Edit profile).
+    else if (!row && safeEqual(password, env.ADMIN_PASSWORD)) user = await ownerUser(db);
   }
   if (!user) return fail();
 
