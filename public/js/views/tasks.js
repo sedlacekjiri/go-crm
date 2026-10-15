@@ -87,7 +87,7 @@ export function render(page, ctx) {
   const todoRow = (task, showDate = false) => `<li class="task ${task.done ? 'done' : ''}">
       ${admin ? `<button type="button" class="tick ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
-        <span class="title">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</span>
+        <button type="button" class="title as-link" data-menu-task="${task.id}">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</button>
         <div class="meta">${[taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', !category ? categoryTag(task.category) : '', showDate ? `<b class="late">${shortDate(task.due_date)}</b>` : '', deadlinePill(task, showDate), task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', fileCount('task', task.id) ? `<span class="clip">📎 ${fileCount('task', task.id)}</span>` : '', task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
