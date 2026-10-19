@@ -3,6 +3,7 @@ import { assigneeAvatar, channelTags, kpi, onSeg, pageHeader, seg } from '../com
 import {
   CHANNELS,
   CHECKLIST_TEMPLATES,
+  eventTimeText,
   compactNumber,
   SOCIAL_BRANDS,
   socialSummary,
@@ -25,6 +26,7 @@ import {
 import { api, isAdmin, state, taskPerson, userById } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
 import { taskModal } from './tasks.js';
+import { eventModal } from '../events.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee } from '../people.js';
 import { editorHtml, inlineChecklist, mountEditor, progressPill, toggleInList } from '../checklist.js';
@@ -62,7 +64,7 @@ export async function render(page, ctx) {
   const ideas = posts.filter((p) => p.status === 'idea');
 
   page.innerHTML = `
-    ${pageHeader('Marketing', 'Social media content, ideas and Google reviews', admin ? '<button class="btn secondary" data-new-idea>+ Idea</button><button class="btn" data-new-post>+ Post</button>' : '')}
+    ${pageHeader('Marketing', 'Social media content, ideas and Google reviews', admin ? '<button class="btn secondary" data-new-event>+ Event</button><button class="btn secondary" data-new-idea>+ Idea</button><button class="btn" data-new-post>+ Post</button>' : '')}
     <div class="kpis">
       ${kpi('Published · last 7 days', week.published, `${week.scheduled} scheduled · ${week.inProgress} in progress for the next 7 days${week.late ? ` · <b class="late">${week.late} past their date</b>` : ''}`)}
       ${kpi('Next post', next ? esc(shortDate(next.publish_date)) : '–', next ? `${esc(next.title)}` : 'nothing scheduled')}
@@ -83,6 +85,7 @@ export async function render(page, ctx) {
   });
   page.querySelector('[data-social-update]')?.addEventListener('click', () => socialModal(ctx.refresh));
   page.querySelector('[data-new-post]')?.addEventListener('click', () => postModal({ status: 'in_progress', publish_date: v.selected, channels: ['instagram'] }, ctx.refresh));
+  page.querySelector('[data-new-event]')?.addEventListener('click', () => eventModal({ category: 'marketing', date: v.selected }, refreshToDay(ctx)));
   page.querySelector('[data-new-idea]')?.addEventListener('click', () => postModal({ status: 'idea', channels: [] }, ctx.refresh));
 
   const body = page.querySelector('#mBody');
@@ -117,6 +120,15 @@ async function loadReviews(force = false) {
 }
 
 // ── Content calendar ───────────────────────────────────────────
+// The same events as in Tasks: marketing ones, plus any event you're invited to.
+const calendarEvents = () => (state.events ?? []).filter((e) => e.category === 'marketing' || (e.attendees ?? []).includes(state.me?.id));
+const eventsOn = (d) => calendarEvents().filter((e) => e.date <= d && (e.end_date || e.date) >= d).sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''));
+// After saving an event, show its day.
+const refreshToDay = (ctx) => (date) => {
+  if (date) v.selected = date;
+  ctx.refresh();
+};
+
 function renderContent(el, ctx) {
   const t = today();
   const admin = isAdmin();
@@ -144,6 +156,8 @@ function renderContent(el, ctx) {
   }
   const dlChip = (x) =>
     `<button type="button" class="dchip ${x.date < t ? 'late' : ''}" ${x.kind === 'post' ? `data-post="${x.id}"` : `data-dl-task="${x.id}"`} title="${esc(`Deadline: ${x.title}`)}">⏰ <span class="tx">${esc(x.title)}</span></button>`;
+  const evChip = (e, d) =>
+    `<button type="button" class="echip cat-${esc(e.category)}" data-event="${e.id}" title="${esc(`${e.title} · ${eventTimeText(e, d)}${e.location ? ` · ${e.location}` : ''}`)}">📅 <span class="tx">${e.start_time && (d === e.date) ? `${esc(e.start_time)} ` : ''}${esc(e.title)}</span></button>`;
   const limit = v.mode === 'week' ? 8 : 3;
   const cell = (d) => {
     const list = byDay.get(d) ?? [];
@@ -151,6 +165,7 @@ function renderContent(el, ctx) {
     return `<div class="mday ${cls}" data-day="${d}">
       <div class="mday-h"><span class="dn">${v.mode === 'week' ? new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short' }) + ' ' : ''}${Number(d.slice(8))}</span>
         ${admin ? `<button type="button" class="add" data-add="${d}" aria-label="New post on ${shortDate(d)}">+</button>` : ''}</div>
+      ${eventsOn(d).map((e) => evChip(e, d)).join('')}
       ${(deadlines.get(d) ?? []).map(dlChip).join('')}
       ${list.slice(0, limit).map(chip).join('')}${list.length > limit ? `<span class="more">+${list.length - limit} more</span>` : ''}
     </div>`;
@@ -182,14 +197,25 @@ function renderContent(el, ctx) {
         .join('')}</div>
       ${v.mode === 'month' ? `<div class="cal-dows">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<span>${d}</span>`).join('')}</div>` : ''}
       <div class="mcal ${v.mode}">${days.map(cell).join('')}</div>
-      <div class="cal-legend"><span>⏰ Deadline</span><span><i class="lg st-idea"></i>Planned</span><span><i class="lg st-in_progress"></i>In progress</span><span><i class="lg st-scheduled"></i>Scheduled</span><span><i class="lg st-published"></i>Published</span></div>
+      <div class="cal-legend"><span>📅 Event</span><span>⏰ Deadline</span><span><i class="lg st-idea"></i>Planned</span><span><i class="lg st-in_progress"></i>In progress</span><span><i class="lg st-scheduled"></i>Scheduled</span><span><i class="lg st-published"></i>Published</span></div>
     </section>
 
     <div class="grid grid-side">
       <section class="card">
         <div class="card-head"><h2>${esc(new Date(`${v.selected}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }))}</h2>
-          ${admin ? `<button class="link-btn" data-add="${v.selected}">+ Post this day</button>` : ''}</div>
-        ${sel.length ? `<div class="post-list">${sel.map(postCard).join('')}</div>` : '<p class="empty">No posts this day.</p>'}
+          ${admin ? `<span class="controls"><button class="link-btn" data-add-event="${v.selected}">+ Event</button><button class="link-btn" data-add="${v.selected}">+ Post this day</button></span>` : ''}</div>
+        ${
+          eventsOn(v.selected).length
+            ? `<ul class="tasks day-events">${eventsOn(v.selected)
+                .map(
+                  (e) => `<li class="task event-row"><span class="tick ev" aria-hidden="true">📅</span><div class="body">
+                    <button type="button" class="title as-link" data-event="${e.id}">${esc(e.title)}</button>
+                    <div class="meta">${[`<b>${esc(eventTimeText(e, v.selected))}</b>`, e.category === 'sales' ? '<span class="muted">Sales</span>' : '', e.location ? `📍 ${esc(e.location)}` : ''].filter(Boolean).join(' · ')}</div></div></li>`
+                )
+                .join('')}</ul>`
+            : ''
+        }
+        ${sel.length ? `<div class="post-list">${sel.map(postCard).join('')}</div>` : eventsOn(v.selected).length ? '' : '<p class="empty">No posts or events this day.</p>'}
       </section>
       <section class="card">
         <div class="card-head"><h2>Pipeline</h2></div>
@@ -227,7 +253,11 @@ function renderContent(el, ctx) {
     } else if (d.dlTask) {
       e.stopPropagation();
       taskModal(state.tasks.find((x) => x.id === d.dlTask), ctx.refresh);
-    } else if (d.add) postModal({ status: 'in_progress', publish_date: d.add, channels: ['instagram'] }, ctx.refresh);
+    } else if (d.event) {
+      e.stopPropagation();
+      eventModal(state.events.find((x) => x.id === d.event), refreshToDay(ctx));
+    } else if (d.addEvent) eventModal({ category: 'marketing', date: d.addEvent }, refreshToDay(ctx));
+    else if (d.add) postModal({ status: 'in_progress', publish_date: d.add, channels: ['instagram'] }, ctx.refresh);
     else if (d.shift) {
       v.selected = v.mode === 'week' ? shiftDate(v.selected, 7 * Number(d.shift)) : `${shiftMonth(monthOf(v.selected), Number(d.shift))}-01`;
       rerender();
