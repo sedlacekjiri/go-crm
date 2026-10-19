@@ -99,6 +99,7 @@ export async function render(page, ctx) {
   if (tab === 'content') renderContent(body, ctx);
   else if (tab === 'ideas') renderIdeas(body, ctx);
   else await renderReviews(body, ctx);
+  openDraftFromLink(ctx);
 
   // Rating tile (uses cached reviews data; loads it once if needed).
   loadReviews()
@@ -348,6 +349,29 @@ function renderIdeas(el, ctx) {
 }
 
 // ── Post editor (also used from Tasks) ─────────────────────────
+// A link like #/marketing?draft=<base64url JSON> opens "New post" filled in (e.g. a carousel
+// written elsewhere). Nothing is saved until you press Save.
+const DRAFT_FIELDS = ['title', 'status', 'publish_date', 'publish_time', 'deadline', 'channels', 'format', 'brand', 'theme', 'caption', 'notes', 'subtasks'];
+function openDraftFromLink(ctx) {
+  const raw = ctx.query.get('draft');
+  if (!raw) return;
+  history.replaceState(null, '', '#/marketing');
+  if (!isAdmin()) return;
+  try {
+    const json = new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)));
+    const d = JSON.parse(json);
+    const post = Object.fromEntries(DRAFT_FIELDS.filter((k) => k in d).map((k) => [k, d[k]]));
+    post.channels = Array.isArray(post.channels) ? post.channels.filter((c) => typeof c === 'string') : [];
+    post.subtasks = Array.isArray(post.subtasks) ? post.subtasks.filter((s) => s && typeof s.title === 'string').map((s) => ({ title: s.title, done: !!s.done })) : [];
+    post.status ??= 'in_progress';
+    if (post.publish_date) v.selected = post.publish_date;
+    postModal(post, ctx.refresh);
+    toast('Draft filled in – check it and press Save');
+  } catch {
+    toast('That draft link is broken', 'error');
+  }
+}
+
 export function postModal(post, refresh) {
   const chosen = new Set(post.channels ?? []);
   const m = openModal(
