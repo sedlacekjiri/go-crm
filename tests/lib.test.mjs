@@ -251,7 +251,7 @@ describe('tasks & calendar', () => {
   });
   it('counts markers and finds the next planned visit', () => {
     const c = dayCounts(['2026-10-08', '2026-10-09'], { tasks, partners });
-    assert.deepEqual(c.get('2026-10-08'), { visits: 2, todos: 1, followUps: 0, posts: 0, open: 3 });
+    assert.deepEqual(c.get('2026-10-08'), { events: 0, visits: 2, todos: 1, followUps: 0, posts: 0, open: 3 });
     assert.equal(c.get('2026-10-09').open, 0);
     assert.equal(nextPlannedVisit('a', tasks), '2026-10-08');
     assert.equal(nextPlannedVisit('c', tasks), null);

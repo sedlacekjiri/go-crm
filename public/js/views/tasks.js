@@ -1,10 +1,11 @@
 // Tasks & calendar: hotel visits, to-dos with deadlines, follow-ups and marketing posts – split into
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, categoryTag, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
-import { agenda, AREAS, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
+import { agenda, AREAS, eventTimeText, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
-import { api, assigneeId, can, isAdmin, state, taskPerson } from '../store.js';
+import { eventModal } from '../events.js';
+import { api, assigneeId, can, isAdmin, state, taskPerson, userById } from '../store.js';
 import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
@@ -44,7 +45,9 @@ export function render(page, ctx) {
   // The "who" filter applies to tasks; partner follow-ups are the owner's and follow the same rule.
   const meId = state.me?.id;
   const showFollowUps = !who || (who === 'me' ? meId === 'owner' : who === 'owner');
-  const data = { ...state, tasks: state.tasks.filter(matchesWho), partners: state.partners };
+  // Events: the person filter shows the ones they're invited to (or created).
+  const eventFor = (e) => !who || (() => { const id = who === 'me' ? meId : who; return id !== 'none' && ((e.attendees ?? []).includes(id) || e.created_by === id); })();
+  const data = { ...state, tasks: state.tasks.filter(matchesWho), partners: state.partners, events: (state.events ?? []).filter(eventFor) };
   const counts = dayCounts(days, data, category);
   const day = agenda(selected, data, category);
   const late = overdue(t, data, category);
@@ -56,7 +59,7 @@ export function render(page, ctx) {
   const rangeLabel = mode === 'week' ? `${shortDate(days[0])} – ${shortDate(days[6])}` : monthLabel(monthOf(selected));
 
   const marker = (c) =>
-    `<span class="marks">${'<i class="v"></i>'.repeat(Math.min(c.visits, 3))}${c.todos ? '<i class="t"></i>' : ''}${c.followUps ? '<i class="f"></i>' : ''}${c.posts ? '<i class="p"></i>' : ''}</span>`;
+    `<span class="marks">${c.events ? '<i class="e"></i>' : ''}${'<i class="v"></i>'.repeat(Math.min(c.visits, 3))}${c.todos ? '<i class="t"></i>' : ''}${c.followUps ? '<i class="f"></i>' : ''}${c.posts ? '<i class="p"></i>' : ''}</span>`;
 
   const cell = (d) => {
     const c = counts.get(d);
@@ -128,6 +131,14 @@ export function render(page, ctx) {
       ${isAdmin() && p.status !== 'published' ? `<div class="acts">${readyBy || ['idea', 'in_progress'].includes(p.status) ? `<button class="btn secondary sm" data-ready="${p.id}">Ready ✓</button>` : `<button class="btn secondary sm" data-published="${p.id}">Mark published</button>`}</div>` : ''}
     </li>`;
 
+  const eventRow = (e) => `<li class="task event-row">
+      <span class="tick ev cat-${esc(e.category)}" aria-hidden="true">📅</span>
+      <div class="body">
+        <button type="button" class="title as-link" data-event="${e.id}">${esc(e.title)}</button>
+        <div class="meta">${[`<b>${esc(eventTimeText(e, selected))}</b>`, !category ? categoryTag(e.category) : '', e.location ? `📍 ${esc(e.location)}` : '', e.partner ? `<a href="#/partner/${e.partner.id}">${esc(e.partner.name)}</a>` : '', (e.attendees ?? []).map((id) => userById(id)).filter(Boolean).map((u) => `<span class="who" title="${esc(u.name)}">${avatar(u, 18)}</span>`).join('')].filter(Boolean).join(' · ')}</div>
+      </div>
+    </li>`;
+
   const followRow = (p, showDate = false) => `<li class="task">
       <span class="tick follow" aria-hidden="true">↻</span>
       <div class="body">
@@ -138,11 +149,11 @@ export function render(page, ctx) {
     </li>`;
 
   const lateCount = late.tasks.length + late.followUps.length + late.posts.length;
-  const empty = !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length && !day.readyBy.length;
+  const empty = !day.events.length && !day.visits.length && !day.todos.length && !day.followUps.length && !day.ongoing.length && !day.posts.length && !day.readyBy.length;
 
   const tab = ['notes', 'done'].includes(ctx.query.get('tab')) ? ctx.query.get('tab') : 'plan';
   const top = `
-    ${pageHeader('Tasks', 'Hotel visits, to-dos, deadlines and notes – sales and marketing', admin ? `<button class="btn secondary" data-new-task>+ Task</button>${can('sales') ? '<button class="btn" data-plan>Plan visits</button>' : ''}` : '')}
+    ${pageHeader('Tasks', 'Hotel visits, to-dos, events, deadlines and notes – sales and marketing', admin ? `<button class="btn secondary" data-new-event>+ Event</button><button class="btn secondary" data-new-task>+ Task</button>${can('sales') ? '<button class="btn" data-plan>Plan visits</button>' : ''}` : '')}
     <div class="tasks-top">
       <nav class="tabs tasks-tabs"><a href="#/tasks" class="${tab === 'plan' ? 'active' : ''}">Plan</a><a href="#/tasks?tab=notes" class="${tab === 'notes' ? 'active' : ''}">Notes<span class="count">${state.notes.length}</span></a><a href="#/tasks?tab=done" class="${tab === 'done' ? 'active' : ''}">Done ✓</a></nav>
       <div class="chips">${[{ value: '', label: 'All' }, ...TASK_CATEGORIES.filter((c) => can(c.value))]
@@ -177,6 +188,7 @@ export function render(page, ctx) {
         render(page, ctx);
       } else if (b && 'plan' in b.dataset) planVisits(selected, ctx.refresh);
       else if (b && 'newTask' in b.dataset) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: selected, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
+      else if (b && 'newEvent' in b.dataset) eventModal({ category: category || defaultCategory(), date: selected }, ctx.refresh);
     };
     return;
   }
@@ -198,7 +210,7 @@ export function render(page, ctx) {
       </div>
       ${mode === 'month' ? `<div class="cal-dows">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<span>${d}</span>`).join('')}</div>` : ''}
       <div class="cal ${mode}">${days.map(cell).join('')}</div>
-      <div class="cal-legend"><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do / deadline</span><span><i class="f"></i>Follow-up</span><span><i class="p"></i>Post</span></div>
+      <div class="cal-legend"><span><i class="e"></i>Event</span><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do / deadline</span><span><i class="f"></i>Follow-up</span><span><i class="p"></i>Post</span></div>
     </section>
 
     ${
@@ -216,6 +228,7 @@ export function render(page, ctx) {
         empty
           ? `<p class="empty">Nothing planned for this day.${admin && can('sales') ? ' Use “Plan visits” to pick the hotels you’ll walk into.' : ''}</p>`
           : `
+        ${day.events.length ? `<h3 class="sec">Events</h3><ul class="tasks">${day.events.map(eventRow).join('')}</ul>` : ''}
         ${day.visits.length ? `<h3 class="sec">Visits <span class="muted">· ${day.visits.filter((v) => v.done).length}/${day.visits.length} done · sorted by area</span></h3><ul class="tasks">${day.visits.map(visitRow).join('')}</ul>` : ''}
         ${day.ongoing.length ? `<h3 class="sec">In progress <span class="muted">· multi-day tasks</span></h3><ul class="tasks">${day.ongoing.map((x) => todoRow(x)).join('')}</ul>` : ''}
         ${day.readyBy.length ? `<h3 class="sec">Content deadlines</h3><ul class="tasks">${day.readyBy.map((p) => postRow(p, false, true)).join('')}</ul>` : ''}
@@ -227,6 +240,11 @@ export function render(page, ctx) {
 
   // ── Events ──
   const rerender = () => render(page, ctx);
+  // After saving an event, jump to its day.
+  const refreshTo = (date) => {
+    if (date) selected = date;
+    ctx.refresh();
+  };
   page.querySelectorAll('[data-sub-add]').forEach((f) =>
     f.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -291,6 +309,8 @@ export function render(page, ctx) {
       rerender();
     } else if ('plan' in d) planVisits(selected, ctx.refresh);
     else if ('newTask' in d) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: selected, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
+    else if ('newEvent' in d) eventModal({ category: category || defaultCategory(), date: selected }, refreshTo);
+    else if (d.event) eventModal(state.events.find((x) => x.id === d.event), refreshTo);
     else if (d.log) {
       const p = state.partners.find((x) => x.id === d.log);
       logActivity(p, state.contacts.filter((c) => c.partner_id === p.id), ctx.refresh);

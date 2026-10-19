@@ -5,6 +5,7 @@ import {
   activityLabel,
   actuals,
   agenda,
+  eventTimeText,
   marketingDeadlines,
   postWeekStats,
   overdue,
@@ -46,6 +47,7 @@ export async function render(page, { isCurrent }) {
   const late = overdue(t, state);
   const lateCount = late.tasks.length + late.followUps.length;
   const todayItems = [
+    ...day.events.map((x) => ({ title: x.title, sub: ['Event', eventTimeText(x, t), x.location].filter(Boolean).join(' · '), href: '#/tasks', done: false, pill: '<span class="pill">📅 Event</span>' })),
     ...day.visits.map((v) => ({ title: v.partner.name, sub: `Visit · ${v.partner.area ?? ''}`, href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
     ...day.followUps.map((p) => ({ title: p.name, sub: `Follow-up · ${STAGES.find((s) => s.value === p.stage)?.label}`, href: `#/partner/${p.id}`, done: false, pill: followUpPill(p.next_follow_up) })),
     ...day.posts.map((x) => ({ title: x.title, sub: ['Post', x.publish_time, x.channels.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ')].filter(Boolean).join(' · '), href: '#/marketing', done: x.status === 'published', pill: x.status === 'published' ? '<span class="pill good">Published</span>' : '<span class="pill">Post</span>', who: x })),
@@ -166,6 +168,7 @@ function renderLite(page) {
   const week = can('marketing') ? postWeekStats(state.posts ?? [], t) : null;
   const deadlines = can('marketing') ? marketingDeadlines(state, t, 14) : [];
   const items = [
+    ...day.events.map((x) => ({ title: x.title, sub: ['📅 Event', eventTimeText(x, t), x.location].filter(Boolean).join(' · '), done: false })),
     ...day.todos.map((x) => ({ title: x.title, sub: ['To-do', x.due_time].filter(Boolean).join(' · '), done: x.done, who: x })),
     ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, done: false, who: x })),
     ...day.posts.map((x) => ({ title: x.title, sub: `Post · ${x.channels.join(', ')}`, done: x.status === 'published', who: x })),

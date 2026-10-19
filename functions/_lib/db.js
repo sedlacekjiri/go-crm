@@ -100,6 +100,19 @@ export function canSeeTask(t, auth) {
   return t.assignee_id === auth.user.id || t.created_by === auth.user.id || hasSubtaskFor(t, auth.user.id);
 }
 
+// Events: the section's people see them, plus whoever created them or is invited.
+const eventPeople = (e) => {
+  try {
+    const list = typeof e.attendees === 'string' ? JSON.parse(e.attendees) : e.attendees;
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+};
+export const canSeeEvent = (e, auth) => auth.has(e.category || 'sales') || e.created_by === auth.user.id || eventPeople(e).includes(auth.user.id);
+export const canEditEvent = (e, auth) => auth.role !== 'viewer' && (auth.canEdit(e.category || 'sales') || e.created_by === auth.user.id);
+export const parseAttendees = eventPeople;
+
 // Someone is responsible for one of the task's subtasks.
 export function hasSubtaskFor(t, userId) {
   const list = typeof t.subtasks === 'string' ? parseSubtasks(t.subtasks) : t.subtasks ?? [];
@@ -407,6 +420,24 @@ const SCHEMA = [
     name TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`,
+  // Calendar events: meetings, fairs, shoots… (not tasks – nothing to tick off).
+  `CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'sales',
+    date TEXT NOT NULL,
+    end_date TEXT,
+    start_time TEXT,
+    end_time TEXT,
+    location TEXT,
+    partner_id TEXT,
+    attendees TEXT,
+    notes TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS events_date ON events (date)`,
   // Notes for the weekly marketing meeting (week = its Monday).
   `CREATE TABLE IF NOT EXISTS report_notes (
     week TEXT PRIMARY KEY,

@@ -625,7 +625,7 @@ export const monthGrid = (month) => Array.from({ length: 42 }, (_, i) => shiftDa
 //   ongoing   multi-day tasks running that day (start_date ≤ day < deadline)
 //   followUps partner follow-ups not already covered by a planned visit (sales)
 //   posts     marketing posts planned / published that day
-export function agenda(date, { tasks, partners, posts = [] }, category = '') {
+export function agenda(date, { tasks, partners, posts = [], events = [] }, category = '') {
   const byId = new Map(partners.map((p) => [p.id, p]));
   const inCat = (t) => !category || (t.category || 'sales') === category;
   const onDay = tasks.filter((t) => t.due_date === date && inCat(t));
@@ -649,7 +649,55 @@ export function agenda(date, { tasks, partners, posts = [] }, category = '') {
     category === 'sales' ? [] : posts.filter((p) => p.publish_date === date && p.status !== 'idea').sort((a, b) => (a.publish_time ?? '99').localeCompare(b.publish_time ?? '99'));
   // Content that has to be ready that day.
   const readyBy = category === 'sales' ? [] : posts.filter((p) => p.deadline === date && postDeadlineOpen(p));
-  return { visits, todos, ongoing, followUps, posts: dayPosts, readyBy };
+  // Meetings and other events on that day (multi-day ones on every day they cover).
+  const dayEvents = events
+    .filter((e) => e.date <= date && (e.end_date || e.date) >= date && inCat(e))
+    .map((e) => ({ ...e, partner: byId.get(e.partner_id) ?? null }))
+    .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? '') || a.title.localeCompare(b.title));
+  return { events: dayEvents, visits, todos, ongoing, followUps, posts: dayPosts, readyBy };
+}
+
+// "09:30 – 10:30", "From 14:00", "All day", "17–19 Oct" (multi-day), for an event on `day`.
+export function eventTimeText(e, day = e.date) {
+  const multi = e.end_date && e.end_date > e.date;
+  const span = multi ? `${Number(e.date.slice(8))}.${Number(e.date.slice(5, 7))} – ${Number(e.end_date.slice(8))}.${Number(e.end_date.slice(5, 7))}` : '';
+  const time = !e.start_time ? 'All day' : e.end_time ? `${e.start_time} – ${e.end_time}` : `From ${e.start_time}`;
+  if (!multi) return time;
+  return day === e.date && e.start_time ? `${span} · starts ${e.start_time}` : span;
+}
+
+// .ics text for one event (Iceland is on UTC all year, so local time = UTC).
+export function eventIcs(e, { now = new Date(), url = '' } = {}) {
+  const d = (date) => date.replace(/-/g, '');
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const clean = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, (m) => `\\${m}`);
+  let start;
+  let end;
+  if (e.start_time) {
+    start = `DTSTART:${d(e.date)}T${e.start_time.replace(':', '')}00Z`;
+    const endTime = e.end_time ?? `${String(Math.min(23, Number(e.start_time.slice(0, 2)) + 1)).padStart(2, '0')}${e.start_time.slice(3)}`;
+    end = `DTEND:${d(e.end_date || e.date)}T${endTime.replace(':', '')}00Z`;
+  } else {
+    start = `DTSTART;VALUE=DATE:${d(e.date)}`;
+    end = `DTEND;VALUE=DATE:${d(shiftDate(e.end_date || e.date, 1))}`;
+  }
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Go CRM//EN',
+    'BEGIN:VEVENT',
+    `UID:${e.id}@go-crm`,
+    `DTSTAMP:${stamp}`,
+    start,
+    end,
+    `SUMMARY:${clean(e.title)}`,
+    e.location ? `LOCATION:${clean(e.location)}` : '',
+    e.notes || url ? `DESCRIPTION:${clean([e.notes, url].filter(Boolean).join('\n\n'))}` : '',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ]
+    .filter(Boolean)
+    .join('\r\n');
 }
 
 // Finished tasks grouped by the (local) day they were ticked off, newest first.
@@ -720,7 +768,7 @@ export function dayCounts(dates, data, category = '') {
   for (const d of dates) {
     const a = agenda(d, data, category);
     const open = a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length + a.posts.filter((p) => p.status !== 'published').length + a.readyBy.length;
-    out.set(d, { visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, posts: a.posts.length + a.readyBy.length, open });
+    out.set(d, { events: a.events.length, visits: a.visits.length, todos: a.todos.length, followUps: a.followUps.length, posts: a.posts.length + a.readyBy.length, open });
   }
   return out;
 }

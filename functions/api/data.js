@@ -4,7 +4,7 @@
 // (for "Assign to") and who they are.
 // The data set is small (hundreds of partners), so the page loads it all at once.
 
-import { authorize, canSeeTask, json, ownsNote, parseSubtasks, publicUser } from '../_lib/db.js';
+import { authorize, canSeeEvent, canSeeTask, json, ownsNote, parseAttendees, parseSubtasks, publicUser } from '../_lib/db.js';
 
 export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
@@ -13,7 +13,7 @@ export async function onRequestGet({ request, env }) {
   const sales = auth.has('sales');
   const marketing = auth.has('marketing');
   const none = db.prepare('SELECT 1 WHERE 0');
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes, files, folders] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes, files, folders, events] = await db.batch([
     sales ? db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM activities ORDER BY happened_at DESC') : none,
@@ -31,6 +31,7 @@ export async function onRequestGet({ request, env }) {
     marketing ? db.prepare('SELECT week, notes, updated_by, updated_at FROM report_notes') : none,
     db.prepare('SELECT id, parent_type, parent_id, folder_id, name, type, size, created_by, created_at FROM files ORDER BY created_at'),
     marketing ? db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE') : none,
+    db.prepare(`SELECT * FROM events WHERE COALESCE(end_date, date) >= date('now', '-120 days') ORDER BY date, start_time`),
   ]);
   const visibleTasks = tasks.results.filter((t) => canSeeTask(t, auth));
   const taskIds = new Set(visibleTasks.map((t) => t.id));
@@ -58,5 +59,6 @@ export async function onRequestGet({ request, env }) {
     // Attachments (without their contents) of the tasks and posts this person can see.
     files: files.results.filter((f) => (f.parent_type === 'task' ? taskIds.has(f.parent_id) : marketing)),
     folders: folders.results,
+    events: events.results.filter((e) => canSeeEvent(e, auth)).map((e) => ({ ...e, attendees: parseAttendees(e) })),
   });
 }
