@@ -3,6 +3,8 @@ import { dueCount, today } from './lib.js';
 import { avatar, ICONS, roleLabel, seg } from './components.js';
 import { can, currency, hasToken, isAdmin, isTeamAdmin, loadData, loadTodayRate, login, logoutSession, setToken, state } from './store.js';
 import { $, esc, openModal, storage, toast } from './util.js';
+import { eventModal } from './events.js';
+import { mountSearch } from './search.js';
 import * as dashboard from './views/dashboard.js';
 import * as goals from './views/goals.js';
 import * as importView from './views/import.js';
@@ -140,6 +142,7 @@ function renderMe() {
   $('#meChip').innerHTML = me
     ? `${avatar(me, 34)}<span class="me-text"><b>${esc(me.name)}</b><small>${esc(roleLabel(me.role))}</small></span>`
     : '';
+  $('#topMe').innerHTML = me ? avatar(me, 34) : '';
 }
 
 function renderCurrencySwitch() {
@@ -193,6 +196,8 @@ document.addEventListener('click', (e) => {
     });
     return;
   }
+  if (action === 'new') return toggleNewMenu(e.target.closest('[data-action]'));
+  if (action === 'search') return searchSheet();
   if (action === 'profile') return team.profileModal(() => (buildNav(), render()));
   if (action === 'team') return navigate('#/team');
   if (action === 'theme') toggleTheme();
@@ -215,6 +220,53 @@ document.addEventListener('click', (e) => {
       else logout();
     });
   }
+});
+
+// "+ New" in the top bar: whatever the signed-in person can create.
+function toggleNewMenu(btn) {
+  const menu = $('#newMenu');
+  const open = menu.hidden;
+  if (open) {
+    const items = [
+      isAdmin() && ['task', 'Task'],
+      isAdmin() && ['event', 'Event'],
+      isAdmin() && can('marketing') && ['post', 'Post'],
+      isAdmin() && can('sales') && ['partner', 'Partner'],
+    ].filter(Boolean);
+    menu.innerHTML = items.map(([v, l]) => `<button type="button" data-new="${v}">${l}</button>`).join('');
+  }
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+}
+
+$('#newMenu').addEventListener('click', (e) => {
+  const v = e.target.closest('[data-new]')?.dataset.new;
+  if (!v) return;
+  $('#newMenu').hidden = true;
+  if (v === 'task') tasks.taskModal({ type: 'todo', due_date: today() }, refresh);
+  else if (v === 'event') eventModal({}, refresh);
+  else if (v === 'post') marketing.postModal({}, refresh);
+  else navigate('#/partners/new');
+});
+document.addEventListener('mousedown', (e) => {
+  if (!e.target.closest('.new-menu')) $('#newMenu').hidden = true;
+});
+
+// Phones: search opens as a sheet.
+function searchSheet() {
+  const m = openModal('Search', '<div class="search in-sheet"><input type="search" class="input" placeholder="Partners, tasks, posts…" autocomplete="off" aria-label="Search" /><div class="search-results" hidden></div></div>');
+  m.el.querySelector('.modal').classList.add('narrow');
+  const input = m.el.querySelector('input');
+  mountSearch(input, m.el.querySelector('.search-results'), { navigate, refresh }, () => m.close());
+  input.focus();
+}
+
+mountSearch($('#searchInput'), $('#searchResults'), { navigate, refresh });
+document.addEventListener('keydown', (e) => {
+  if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'k' || $('#appView').classList.contains('hidden')) return;
+  e.preventDefault();
+  if (getComputedStyle($('.topbar')).display === 'none') searchSheet();
+  else $('#searchInput').focus();
 });
 
 function toggleTheme() {

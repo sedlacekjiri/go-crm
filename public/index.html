@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#111110" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#17181b" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b0c0e" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Go CRM" />
   <title>Go CRM</title>
@@ -20,7 +20,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -52,10 +52,29 @@
       </div>
     </aside>
     <main>
+      <div class="topbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="searchInput" placeholder="Search partners, tasks, posts…" autocomplete="off" aria-label="Search" />
+          <kbd>⌘K</kbd>
+          <div class="search-results" id="searchResults" hidden></div>
+        </div>
+        <div class="topbar-end">
+          <div class="seg currency-seg"></div>
+          <div class="new-menu">
+            <button class="btn sm" type="button" data-action="new" aria-haspopup="true" aria-expanded="false">+ New</button>
+            <div class="menu-pop" id="newMenu" hidden></div>
+          </div>
+          <button class="top-me" type="button" data-action="profile" id="topMe" aria-label="Edit profile"></button>
+        </div>
+      </div>
       <div class="mobile-top">
         <a class="logo" href="#/"><img src="/logo.png" alt="Go" /><span>CRM</span></a>
         <div class="mobile-top-actions">
           <div class="seg currency-seg"></div>
+          <button class="icon-btn round" type="button" data-action="search" aria-label="Search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          </button>
           <button class="icon-btn round" type="button" data-action="menu" aria-label="Menu">
             <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
           </button>
