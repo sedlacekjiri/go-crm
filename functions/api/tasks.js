@@ -126,6 +126,8 @@ export async function onRequestDelete({ request, env }) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id),
     env.DB.prepare(`DELETE FROM files WHERE parent_type = 'task' AND parent_id = ?`).bind(id),
+    env.DB.prepare(`DELETE FROM comments WHERE parent_type = 'task' AND parent_id = ?`).bind(id),
+    env.DB.prepare(`DELETE FROM comment_reads WHERE parent_type = 'task' AND parent_id = ?`).bind(id),
   ]);
   return json({ ok: true });
 }

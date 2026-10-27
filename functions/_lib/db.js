@@ -97,8 +97,24 @@ async function userFromToken(env, token) {
 export function canSeeTask(t, auth) {
   if (t.type === 'visit') return auth.has('sales');
   if (auth.has(t.category || 'sales')) return true;
-  return t.assignee_id === auth.user.id || t.created_by === auth.user.id || hasSubtaskFor(t, auth.user.id);
+  return t.assignee_id === auth.user.id || t.created_by === auth.user.id || hasSubtaskFor(t, auth.user.id) || parseList(t.followers).includes(auth.user.id);
 }
+
+// A JSON list of ids stored in a text column (task followers, comment mentions).
+export function parseList(v) {
+  try {
+    const list = typeof v === 'string' ? JSON.parse(v) : v;
+    return Array.isArray(list) ? list.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// What another team member could see, for checking @mentions: a stand-in for their auth context.
+export const authFor = (u) => {
+  const p = publicUser(u);
+  return { user: p, role: p.role, has: (sec) => p.sections.includes(sec) };
+};
 
 // Events: the section's people see them, plus whoever created them or is invited.
 const eventPeople = (e) => {
@@ -445,6 +461,27 @@ const SCHEMA = [
     updated_by TEXT,
     updated_at TEXT NOT NULL
   )`,
+  // Comments on tasks and posts. Mentions are written into the text as <@userId>.
+  `CREATE TABLE IF NOT EXISTS comments (
+    id TEXT PRIMARY KEY,
+    parent_type TEXT NOT NULL,
+    parent_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    mentions TEXT,
+    reactions TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    edited_at TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS comments_parent ON comments (parent_type, parent_id)`,
+  // When someone last read the comments of a task / post (for "new" in their inbox).
+  `CREATE TABLE IF NOT EXISTS comment_reads (
+    user_id TEXT NOT NULL,
+    parent_type TEXT NOT NULL,
+    parent_id TEXT NOT NULL,
+    read_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, parent_type, parent_id)
+  )`,
   `CREATE TABLE IF NOT EXISTS goals (
     month TEXT NOT NULL,
     metric TEXT NOT NULL,
@@ -478,6 +515,7 @@ const MIGRATIONS = [
   `ALTER TABLE reviews ADD COLUMN reply_at TEXT`,
   `ALTER TABLE files ADD COLUMN folder_id TEXT`, // Files page folder (null = not in a folder)
   `ALTER TABLE posts ADD COLUMN assignee_id TEXT`, // who makes the post
+  `ALTER TABLE tasks ADD COLUMN followers TEXT`, // JSON ids: people @mentioned in its comments see the task
 ];
 
 let schemaReady = false;

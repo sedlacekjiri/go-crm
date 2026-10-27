@@ -1193,3 +1193,56 @@ export function laterItems({ tasks, partners = [], posts = [], events = [] }, fr
     ...events.filter((e) => inRange(e.date) && inCat(e.category)).map((e) => ({ kind: 'event', date: e.date, ref: e })),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 }
+
+// ── Comments ─────────────────────────────
+
+// Mentions are stored in the text as <@userId>. People are written as @First name, or @Full name
+// when two people share a first name.
+export function mentionLabel(user, users) {
+  const first = user.name.split(' ')[0];
+  return users.filter((u) => u.name.split(' ')[0] === first).length > 1 ? user.name : first;
+}
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export function encodeMentions(text, users) {
+  // Longest names first, so "@Anna Berg" wins over "@Anna".
+  const names = users.flatMap((u) => [...new Set([u.name, mentionLabel(u, users)])].map((n) => [n, u.id])).sort((a, b) => b[0].length - a[0].length);
+  let out = text;
+  for (const [name, id] of names) out = out.replace(new RegExp(`@${escapeRe(name)}(?![\\p{L}\\p{N}])`, 'gu'), `<@${id}>`);
+  return out;
+}
+export const decodeMentions = (text, users) =>
+  text.replace(/<@([\w-]+)>/g, (m, id) => {
+    const u = users.find((x) => x.id === id);
+    return u ? `@${mentionLabel(u, users)}` : '@someone';
+  });
+
+// What's new for `me` in comments: one row per task / post with unread comments by others, where
+// I'm mentioned or involved (assigned, created it, have a subtask, follow it, or commented before).
+export function inboxItems(data, me) {
+  const reads = new Map((data.commentReads ?? []).map((r) => [`${r.parent_type}:${r.parent_id}`, r.read_at]));
+  const byParent = new Map();
+  for (const c of data.comments ?? []) {
+    const key = `${c.parent_type}:${c.parent_id}`;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(c);
+  }
+  const items = [];
+  for (const [key, list] of byParent) {
+    const [type, id] = key.split(':');
+    const parent = (type === 'task' ? data.tasks : data.posts)?.find((x) => x.id === id);
+    if (!parent) continue;
+    const read = reads.get(key) ?? '';
+    const fresh = list.filter((c) => c.created_by !== me && c.created_at > read);
+    if (!fresh.length) continue;
+    const mentioned = fresh.some((c) => (c.mentions ?? []).includes(me));
+    const involved =
+      parent.assignee_id === me ||
+      parent.created_by === me ||
+      (parent.subtasks ?? []).some((s) => s.assignee_id === me) ||
+      (parent.followers ?? []).includes(me) ||
+      list.some((c) => c.created_by === me);
+    if (!mentioned && !involved) continue;
+    items.push({ type, parent, comments: fresh, last: fresh[fresh.length - 1], mentioned });
+  }
+  return items.sort((a, b) => (a.last.created_at < b.last.created_at ? 1 : -1));
+}

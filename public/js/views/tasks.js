@@ -2,6 +2,7 @@
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
 import { agenda, AREAS, eventTimeText, laterItems, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
+import { commentChip, commentsHtml, mountComments } from '../comments.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
 import { eventModal } from '../events.js';
@@ -91,7 +92,7 @@ export function render(page, ctx) {
       ${admin ? `<button type="button" class="tick cat-${task.type === 'visit' ? 'sales' : esc(task.category || 'sales')} ${task.done ? 'on' : ''}" data-toggle="${task.id}" aria-label="${task.done ? 'Mark not done' : 'Mark done'}">${task.done ? '✓' : ''}</button>` : `<span class="tick ${task.done ? 'on' : ''}">${task.done ? '✓' : ''}</span>`}
       <div class="body">
         <button type="button" class="title as-link" data-menu-task="${task.id}">${task.type === 'visit' ? `Visit ${esc(task.partner?.name ?? '')}` : esc(task.title)}</button>
-        <div class="meta">${[showDate ? `<span class="due ${isLate ? 'late' : ''}">${isLate ? '⚠ ' : ''}${shortDate(task.due_date)}</span>` : '', deadlinePill(task, showDate), taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', fileCount('task', task.id) ? `<span class="clip">📎 ${fileCount('task', task.id)}</span>` : '', task.notes ? esc(task.notes) : '']
+        <div class="meta">${[showDate ? `<span class="due ${isLate ? 'late' : ''}">${isLate ? '⚠ ' : ''}${shortDate(task.due_date)}</span>` : '', deadlinePill(task, showDate), taskPerson(task) ? `<span class="assignee" title="${esc(taskPerson(task).name)}">${avatar(taskPerson(task), 18)}${esc(taskPerson(task).name.split(' ')[0])}</span>` : '', task.due_time ? esc(task.due_time) : '', task.partner && task.type !== 'visit' ? `<a href="#/partner/${task.partner.id}">${esc(task.partner.name)}</a>` : '', fileCount('task', task.id) ? `<span class="clip">📎 ${fileCount('task', task.id)}</span>` : '', commentChip('task', task.id), task.notes ? esc(task.notes) : '']
           .filter(Boolean)
           .join(' · ')}</div>
       </div>
@@ -126,7 +127,7 @@ export function render(page, ctx) {
       <span class="tick post st-${p.status}" aria-hidden="true">${p.status === 'published' ? '✓' : ''}</span>
       <div class="body">
         <button type="button" class="title as-link" data-post="${p.id}">${esc(p.title)}</button>
-        <div class="meta">${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="due ${isLate ? 'late' : ''}">${shortDate(p.publish_date)}</span>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${taskPerson(p) ? `<span class="assignee" title="${esc(taskPerson(p).name)}">${avatar(taskPerson(p), 18)}${esc(taskPerson(p).name.split(' ')[0])}</span>` : ''}${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}</div>
+        <div class="meta">${readyBy || (showDate && p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="pill ${showDate ? 'overdue' : 'today'}">⏰ ready by ${shortDate(p.deadline)}</span>` : ''}${showDate && !(p.deadline && p.deadline < t && ['idea', 'in_progress'].includes(p.status)) ? `<span class="due ${isLate ? 'late' : ''}">${shortDate(p.publish_date)}</span>` : ''}${p.publish_time ? `<span>${esc(p.publish_time)}</span>` : ''}${channelTags(p.channels)}<span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${taskPerson(p) ? `<span class="assignee" title="${esc(taskPerson(p).name)}">${avatar(taskPerson(p), 18)}${esc(taskPerson(p).name.split(' ')[0])}</span>` : ''}${p.subtasks?.length ? `<span>☑ ${p.subtasks.filter((st) => st.done).length}/${p.subtasks.length}</span>` : ''}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}${commentChip('post', p.id)}</div>
       </div>
       ${isAdmin() && p.status !== 'published' ? `<div class="acts">${readyBy || ['idea', 'in_progress'].includes(p.status) ? `<button class="btn secondary sm" data-ready="${p.id}">Ready ✓</button>` : `<button class="btn secondary sm" data-published="${p.id}">Mark published</button>`}</div>` : ''}
     </li>`;
@@ -553,12 +554,14 @@ export function taskModal(task, refresh) {
         <div class="sub-add"><input class="input" data-sub-new placeholder="Add a step and press Enter" autocomplete="off" /><button class="btn secondary sm" type="button" data-sub-new-btn>Add</button></div></div>`}
       <button class="btn block" type="submit">${task.id ? 'Save' : 'Add task'}</button>
       ${task.id ? `<button class="btn danger block" type="button" data-remove>${isVisit ? 'Remove from plan' : 'Delete task'}</button>` : ''}
-    </form>`
+    </form>
+    ${commentsHtml('task', task.id)}`
   );
   m.el.querySelector('.modal').classList.add('wide');
   const form = m.el.querySelector('form');
   wireDateChips(m, form.due_date);
   const files = mountFiles(m.el, 'task', task.id, isAdmin());
+  mountComments(m.el, 'task', task.id);
   let cat = task.category || defaultCategory();
   // Checklist editor (kept in memory, saved with the task).
   let subs = (task.subtasks ?? []).map((s) => ({ ...s }));

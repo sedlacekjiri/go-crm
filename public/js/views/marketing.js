@@ -27,6 +27,7 @@ import { api, isAdmin, state, taskPerson, userById } from '../store.js';
 import { copyText, esc, formData, monthLabel, num, openModal, options, shortDate, toast } from '../util.js';
 import { taskModal } from './tasks.js';
 import { eventModal } from '../events.js';
+import { commentChip, commentsHtml, mountComments } from '../comments.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee } from '../people.js';
 import { editorHtml, inlineChecklist, mountEditor, progressPill, toggleInList } from '../checklist.js';
@@ -277,7 +278,7 @@ function renderContent(el, ctx) {
 
 function postCard(p) {
   return `<article class="post-card" data-post="${p.id}">
-    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}${assigneeAvatar(taskPerson(p), 20)}</div>
+    <div class="pc-top"><span class="status st-${p.status}">${postStatusLabel(p.status)}</span>${channelTags(p.channels)}${p.publish_time ? `<span class="muted small">${esc(p.publish_time)}</span>` : ''}${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}${commentChip('post', p.id)}${assigneeAvatar(taskPerson(p), 20)}</div>
     <h4>${esc(p.title)}</h4>
     <div class="muted small">${[brandName(p.brand), fmtName(p.format), p.theme].filter(Boolean).map(esc).join(' · ')}</div>
     ${p.caption ? `<p class="caption">${esc(p.caption.length > 180 ? `${p.caption.slice(0, 180)}…` : p.caption)}</p>` : ''}
@@ -315,7 +316,7 @@ function renderIdeas(el, ctx) {
                 ${p.theme ? `<span class="theme">${esc(p.theme)}</span>` : ''}
                 <h4>${esc(p.title)}</h4>
                 ${p.caption ? `<p>${esc(p.caption.length > 140 ? `${p.caption.slice(0, 140)}…` : p.caption)}</p>` : ''}
-                ${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}
+                ${readyByPill(p)}${progressPill(p)}${fileCount('post', p.id) ? `<span class="clip">📎 ${fileCount('post', p.id)}</span>` : ''}${commentChip('post', p.id)}
                 <div class="idea-foot">${channelTags(p.channels)}<span class="muted small">${esc(brandName(p.brand))}</span>${assigneeAvatar(taskPerson(p), 20)}
                   ${admin ? `<span class="idea-acts"><button class="btn sm" data-schedule="${p.id}">Schedule</button><button class="icon-btn round sm" data-post="${p.id}" aria-label="Edit">✎</button></span>` : ''}</div>
               </article>`
@@ -410,7 +411,8 @@ export function postModal(post, refresh) {
       ${filesFieldHtml(isAdmin())}
       ${isAdmin() ? `<button class="btn block" type="submit">${post.id ? 'Save' : post.status === 'idea' ? 'Save idea' : 'Add post'}</button>` : ''}
       ${isAdmin() && post.id ? '<button class="btn danger block" type="button" data-remove>Delete</button>' : ''}
-    </form>`
+    </form>
+    ${commentsHtml('post', post.id)}`
   );
   m.el.querySelector('.modal').classList.add('wide');
   const form = m.el.querySelector('form');
@@ -418,6 +420,7 @@ export function postModal(post, refresh) {
   const getChecklist = mountEditor(m.el, post.subtasks, () => CHECKLIST_TEMPLATES[form.format.value] ?? CHECKLIST_TEMPLATES.reel);
   let status = post.status ?? 'idea';
   const files = mountFiles(m.el, 'post', post.id, isAdmin());
+  mountComments(m.el, 'post', post.id);
   const assignee = mountAssignee(m.el, post.id ? post.assignee_id : state.me?.id);
   m.el.querySelector('[data-dl-quick]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-n]');

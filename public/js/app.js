@@ -1,10 +1,11 @@
 // Entry point: login, navigation (sidebar / phone tab bar), hash router.
-import { dueCount, today } from './lib.js';
+import { dueCount, inboxItems, today } from './lib.js';
 import { avatar, ICONS, roleLabel, seg } from './components.js';
-import { can, currency, hasToken, isAdmin, isTeamAdmin, loadData, loadTodayRate, login, logoutSession, setToken, state } from './store.js';
+import { api, can, currency, hasToken, isAdmin, isTeamAdmin, loadData, loadTodayRate, login, logoutSession, setToken, state, userById } from './store.js';
 import { $, esc, openModal, storage, toast } from './util.js';
 import { eventModal } from './events.js';
 import { mountSearch } from './search.js';
+import { bodyHtml, timeAgo } from './comments.js';
 import * as dashboard from './views/dashboard.js';
 import * as goals from './views/goals.js';
 import * as importView from './views/import.js';
@@ -120,7 +121,79 @@ function updateBadges() {
     b.textContent = due;
     b.hidden = !due;
   });
+  const news = state.me ? inboxItems(state, state.me.id) : [];
+  document.querySelectorAll('.bell-count').forEach((b) => {
+    b.textContent = news.length;
+    b.hidden = !news.length;
+    b.classList.toggle('mention', news.some((n) => n.mentioned));
+  });
 }
+
+// Comments for you: new replies on your tasks / posts and @mentions.
+function inboxSheet() {
+  const items = inboxItems(state, state.me.id);
+  const m = openModal(
+    'Comments for you',
+    items.length
+      ? `<ul class="inbox">${items
+          .map((it, i) => {
+            const who = userById(it.last.created_by);
+            const title = it.type === 'task' ? it.parent.title || `Visit – ${state.partners.find((p) => p.id === it.parent.partner_id)?.name ?? ''}` : it.parent.title;
+            return `<li><button type="button" class="inbox-row${it.mentioned ? ' mentioned' : ''}" data-i="${i}">${avatar(who ?? { name: '?' }, 34)}
+              <span class="ib-main"><span class="ib-line"><b>${esc(who?.name.split(' ')[0] ?? 'Someone')}</b> ${it.mentioned ? 'mentioned you on' : 'commented on'} <b>${esc(title)}</b></span>
+              <span class="ib-text">${bodyHtml(it.last.body)}</span>
+              <span class="ib-meta">${timeAgo(it.last.created_at)}${it.comments.length > 1 ? ` · ${it.comments.length} new` : ''} · ${it.type === 'task' ? 'Task' : 'Post'}</span></span></button></li>`;
+          })
+          .join('')}</ul>
+         <button type="button" class="btn secondary block" data-read-all>Mark all as read</button>`
+      : '<div class="empty-box"><b>All caught up</b>New comments on your tasks and posts, and @mentions of you, show up here.</div>'
+  );
+  m.el.querySelector('.modal').classList.add('narrow');
+  m.el.addEventListener('click', async (e) => {
+    const row = e.target.closest('[data-i]');
+    if (row) {
+      const it = items[Number(row.dataset.i)];
+      m.close();
+      if (it.type === 'task') tasks.taskModal(it.parent, refresh);
+      else marketing.postModal(it.parent, refresh);
+      return;
+    }
+    if (!e.target.closest('[data-read-all]')) return;
+    try {
+      const done = await Promise.all(items.map((it) => api('/api/comments', { method: 'PUT', body: { parent_type: it.type, parent_id: it.parent.id } })));
+      for (const r of done) {
+        const old = (state.commentReads ??= []).find((x) => x.parent_type === r.parent_type && x.parent_id === r.parent_id);
+        if (old) old.read_at = r.read_at;
+        else state.commentReads.push(r);
+      }
+      m.close();
+      onComments();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+}
+
+// After a comment / reaction / read: update the bell, and the 💬 counts in lists unless someone is typing on the page.
+function onComments() {
+  updateBadges();
+  if (!document.querySelector('#page :focus')) render();
+}
+window.addEventListener('go-crm:comments', onComments);
+
+// New comments from colleagues: check every minute while the CRM is open.
+async function pollComments() {
+  if (document.hidden || $('#appView').classList.contains('hidden')) return;
+  try {
+    const { comments, commentReads } = await api('/api/comments');
+    const before = (state.comments ?? []).map((c) => c.id + (c.edited_at ?? '') + JSON.stringify(c.reactions)).join();
+    state.comments = comments;
+    state.commentReads = commentReads;
+    if (comments.map((c) => c.id + (c.edited_at ?? '') + JSON.stringify(c.reactions)).join() !== before) onComments();
+  } catch {}
+}
+setInterval(pollComments, 60_000);
+document.addEventListener('visibilitychange', pollComments);
 
 function buildNav() {
   const item = (n) =>
@@ -198,6 +271,7 @@ document.addEventListener('click', (e) => {
   }
   if (action === 'new') return toggleNewMenu(e.target.closest('[data-action]'));
   if (action === 'search') return searchSheet();
+  if (action === 'inbox') return inboxSheet();
   if (action === 'profile') return team.profileModal(() => (buildNav(), render()));
   if (action === 'team') return navigate('#/team');
   if (action === 'theme') toggleTheme();

@@ -4,7 +4,8 @@
 // (for "Assign to") and who they are.
 // The data set is small (hundreds of partners), so the page loads it all at once.
 
-import { authorize, canSeeEvent, canSeeTask, json, ownsNote, parseAttendees, parseSubtasks, publicUser } from '../_lib/db.js';
+import { visibleComments } from '../_lib/comments.js';
+import { authorize, canSeeEvent, canSeeTask, json, ownsNote, parseAttendees, parseList, parseSubtasks, publicUser } from '../_lib/db.js';
 
 export async function onRequestGet({ request, env }) {
   const auth = await authorize(request, env);
@@ -35,6 +36,7 @@ export async function onRequestGet({ request, env }) {
   ]);
   const visibleTasks = tasks.results.filter((t) => canSeeTask(t, auth));
   const taskIds = new Set(visibleTasks.map((t) => t.id));
+  const { comments, commentReads } = await visibleComments(env, auth, taskIds);
   return json({
     me: auth.user,
     role: auth.role,
@@ -46,7 +48,7 @@ export async function onRequestGet({ request, env }) {
     partners: partners.results,
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
     activities: activities.results,
-    tasks: visibleTasks.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks) })),
+    tasks: visibleTasks.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks), followers: parseList(t.followers) })),
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [], subtasks: parseSubtasks(p.subtasks) })),
     affiliates: affiliates.results,
     payouts: payouts.results,
@@ -59,6 +61,8 @@ export async function onRequestGet({ request, env }) {
     // Attachments (without their contents) of the tasks and posts this person can see.
     files: files.results.filter((f) => (f.parent_type === 'task' ? taskIds.has(f.parent_id) : marketing)),
     folders: folders.results,
+    comments,
+    commentReads,
     events: events.results.filter((e) => canSeeEvent(e, auth)).map((e) => ({ ...e, attendees: parseAttendees(e) })),
   });
 }
