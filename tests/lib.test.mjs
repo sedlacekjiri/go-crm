@@ -247,7 +247,7 @@ describe('tasks & calendar', () => {
     const o = overdue('2026-10-08', { tasks, partners });
     assert.deepEqual(o.tasks.map((t) => t.id), [4]);
     assert.deepEqual(o.followUps.map((p) => p.id), ['c']);
-    assert.equal(dueCount('2026-10-08', { tasks, partners }), 3 + 1 + 2); // 3 open today + 1 old todo + follow-ups b, c
+    assert.equal(dueCount('2026-10-08', { tasks, partners }), 3 + 1 + 1); // 3 open today + 1 old todo + overdue follow-up c (b is covered by its planned visit)
   });
   it('counts markers and finds the next planned visit', () => {
     const c = dayCounts(['2026-10-08', '2026-10-09'], { tasks, partners });

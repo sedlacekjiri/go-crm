@@ -780,12 +780,14 @@ export function nextPlannedVisit(partnerId, tasks) {
   return best;
 }
 
-// Open items due today or earlier – for the nav badge.
-export function dueCount(date, { tasks, partners }) {
-  const ids = new Set(partners.map((p) => p.id));
+// Open items overdue or due today – for the nav badge (matches "N overdue · N for today" on Tasks).
+export function dueCount(date, data) {
+  const late = overdue(date, data);
+  const a = agenda(date, { posts: [], events: [], ...data });
   return (
-    tasks.filter((t) => !t.done && t.due_date <= date && (t.type !== 'visit' || ids.has(t.partner_id))).length +
-    partners.filter((p) => p.next_follow_up && p.next_follow_up <= date && isOpenStage(p)).length
+    late.tasks.length + late.followUps.length + late.posts.length +
+    a.visits.filter((t) => !t.done).length + a.todos.filter((t) => !t.done).length + a.followUps.length +
+    a.posts.filter((p) => p.status !== 'published').length + a.readyBy.length
   );
 }
 
@@ -1172,4 +1174,22 @@ export function weeklyReport({ posts = [], tasks = [], collaborators = [], socia
     google,
     collabs,
   };
+}
+
+// ── Task list (Todoist-style) ──────────────────────────────────
+// Open work after the next 7 days – to-dos, planned visits, posts to publish and events – soonest
+// first, up to `days` ahead.
+export function laterItems({ tasks, partners = [], posts = [], events = [] }, from = today(), category = '', days = 90) {
+  const start = shiftDate(from, 7);
+  const end = shiftDate(from, days);
+  const inRange = (d) => !!d && d >= start && d <= end;
+  const inCat = (c) => !category || (c || 'sales') === category;
+  const byId = new Map(partners.map((p) => [p.id, p]));
+  return [
+    ...tasks
+      .filter((t) => !t.done && inRange(t.due_date) && inCat(t.category) && (t.type !== 'visit' || byId.has(t.partner_id)))
+      .map((t) => ({ kind: 'task', date: t.due_date, ref: { ...t, partner: byId.get(t.partner_id) ?? null } })),
+    ...(category === 'sales' ? [] : posts.filter((p) => p.status !== 'idea' && p.status !== 'published' && inRange(p.publish_date)).map((p) => ({ kind: 'post', date: p.publish_date, ref: p }))),
+    ...events.filter((e) => inRange(e.date) && inCat(e.category)).map((e) => ({ kind: 'event', date: e.date, ref: e })),
+  ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 }

@@ -1055,3 +1055,74 @@ label.btn.file-add input { position: absolute; inset: 0; opacity: 0; cursor: poi
 .echip.cat-sales { background: color-mix(in srgb, var(--accent) 85%, black); color: #fff; }
 .echip .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .day-events { margin-bottom: 12px; }
+
+/* ── Tasks: Todoist-style list (2026-10) ─────────── */
+.tasks-tabs { margin-bottom: 10px; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 2px 0 16px; }
+.seg-pills { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--surface-2); border-radius: 999px; }
+.seg-pills button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--text-2); font: 600 13px/1 inherit; font-family: inherit; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.seg-pills button:hover { color: var(--text); }
+.seg-pills button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--border); }
+.seg-pills .cdot { margin: 0; }
+.people-pills button { padding: 4px 10px 4px 5px; }
+.people-pills button:not(:has(.avatar-img, .avatar-ini)) { padding-left: 12px; }
+
+.tl-section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 4px 16px 8px; margin-bottom: 12px; }
+.tl-head { display: flex; align-items: center; gap: 8px; padding: 12px 0 6px; }
+.tl-head h2 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.tl-date { font-size: 13px; color: var(--text-3); }
+.tl-count { min-width: 22px; height: 20px; padding: 0 7px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.tl-add { margin-left: auto; width: 30px; height: 30px; border: 0; border-radius: 9px; background: transparent; color: var(--text-3); font-size: 20px; line-height: 1; cursor: pointer; }
+.tl-add:hover { background: var(--surface-2); color: var(--text); }
+.tl-section.is-today .tl-head h2 { color: var(--accent); }
+.tl-section.is-late { border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); background: color-mix(in srgb, var(--bad) 3%, var(--surface)); }
+.tl-section.is-late .tl-head h2 { color: var(--bad); }
+.tl-section.is-late .tl-count { background: var(--bad-soft); color: var(--bad); }
+.tl-empty { padding: 4px 0 10px; }
+.tl-later summary { list-style: none; cursor: pointer; }
+.tl-later summary::-webkit-details-marker { display: none; }
+.tl-later summary::after { content: '▾'; margin-left: auto; color: var(--text-3); font-size: 12px; }
+.tl-later[open] summary::after { content: '▴'; }
+.hidden-late { display: block; width: 100%; text-align: left; border: 1px dashed color-mix(in srgb, var(--bad) 50%, transparent); background: var(--bad-soft); color: var(--bad); border-radius: 12px; padding: 10px 14px; margin: -2px 0 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.visit-group { margin-top: 6px; border-top: 1px solid var(--border); }
+.vg-head { font-size: 12px; font-weight: 700; color: var(--text-2); padding: 10px 0 2px; }
+
+/* rows */
+.tl-section .task { margin: 0 -8px; padding: 9px 8px; border-radius: 10px; }
+.tl-section .task + .task { border-top-color: transparent; box-shadow: 0 -1px 0 var(--border); }
+.tl-section .task:hover { background: var(--surface-2); }
+.task .tick { width: 22px; height: 22px; border-width: 2px; }
+.task .tick.cat-sales { border-color: color-mix(in srgb, var(--accent) 75%, transparent); }
+.task .tick.cat-marketing { border-color: color-mix(in srgb, var(--mkt) 75%, transparent); }
+button.tick.cat-sales:hover { background: var(--accent-soft); border-color: var(--accent); }
+button.tick.cat-marketing:hover { background: color-mix(in srgb, var(--mkt) 14%, transparent); border-color: var(--mkt); }
+.task .tick.on { background: var(--good); border-color: var(--good); }
+.task .title { font-weight: 550; font-size: 14px; }
+.task .meta { gap: 6px; margin-top: 3px; }
+.task .meta .due { font-weight: 600; color: var(--text-2); }
+.task .meta .due.late { color: var(--bad); }
+@media (hover: hover) {
+  .task .acts .hover-act, .task .acts .icon-btn { opacity: 0; transition: opacity 0.12s; }
+  .task:hover .acts .hover-act, .task:hover .acts .icon-btn, .task:focus-within .acts .hover-act, .task:focus-within .acts .icon-btn { opacity: 1; }
+}
+@media (max-width: 860px) {
+  .tl-section { padding: 2px 12px 6px; border-radius: 14px; }
+
+
+}
+.people-pills button .pl-label { display: inline; }
+.sub-toggle.empty { opacity: 0; transition: opacity 0.12s; }
+.task:hover .sub-toggle.empty, .sub-toggle.empty:focus-visible, .sub-toggle.empty[aria-expanded="true"] { opacity: 1; }
+@media (hover: none) { .sub-toggle.empty:not([aria-expanded="true"]) { display: none; } }
+@media (max-width: 860px) {
+  .people-pills button span.pl-label { display: none; }
+  .people-pills button[aria-pressed="true"] span.pl-label, .people-pills button:not(:has(.avatar-img, .avatar-ini)) span.pl-label { display: inline; }
+  .tl-section .task .acts .hover-act { display: none; }
+  .tl-section .task .acts .icon-btn { opacity: 1; }
+  .tl-section .task { flex-wrap: nowrap; align-items: flex-start; }
+  .tl-section .task:has(.subtasks) { flex-wrap: wrap; }
+  .tl-section .task .tick { margin-top: 1px; }
+  .tl-section .task .acts { width: auto; padding-left: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .tl-section .task .acts .icon-btn { margin-left: 0; }
+  .tl-section .task .body { flex: 1 1 auto; }
+}
