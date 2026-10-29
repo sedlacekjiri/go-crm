@@ -460,3 +460,16 @@ describe('post week stats', () => {
     assert.deepEqual(s, { published: 2, scheduled: 1, inProgress: 1, late: 1 });
   });
 });
+
+describe('mapsUrls', () => {
+  it('searches the name and address in Iceland', async () => {
+    const { mapsUrls } = await import('../public/js/lib.js');
+    const u = mapsUrls({ name: 'Hótel Borg', address: 'Pósthússtræti 11' });
+    assert.equal(u.open, 'https://www.google.com/maps/search/?api=1&query=H%C3%B3tel%20Borg%2C%20P%C3%B3sth%C3%BAsstr%C3%A6ti%2011%2C%20Iceland');
+    assert.match(u.directions, /\/maps\/dir\/\?api=1&destination=H%C3%B3tel%20Borg/);
+  });
+  it('falls back to the area without its English name', async () => {
+    const { mapsUrls } = await import('../public/js/lib.js');
+    assert.match(mapsUrls({ name: 'Kex', area: '101 Miðborg (Downtown)' }).open, /query=Kex%2C%20101%20Mi%C3%B0borg%2C%20Iceland$/);
+  });
+});

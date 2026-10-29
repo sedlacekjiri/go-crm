@@ -1,6 +1,6 @@
 // One partner: pipeline controls, quick visit logging, contacts, activity log, affiliate results.
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
-import { ACTIVITY_TYPES, activityLabel, brandLabel, capacityText, codeKey, INTEREST, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
+import { ACTIVITY_TYPES, activityLabel, brandLabel, capacityText, codeKey, INTEREST, mapsUrls, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
 import { affiliateModal, affiliateRows, wireAffiliateRows } from './affiliates.js';
 import { planVisits } from './tasks.js';
@@ -20,6 +20,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     return;
   }
   const contacts = state.contacts.filter((c) => c.partner_id === p.id);
+  const maps = mapsUrls(p);
   const activities = state.activities.filter((a) => a.partner_id === p.id);
   const visits = visitStats(activities).get(p.id);
   const planned = nextPlannedVisit(p.id, state.tasks);
@@ -104,7 +105,11 @@ export async function render(page, { params, refresh, isCurrent }) {
           <div class="card-head"><h2>Details</h2></div>
           <dl class="details">
             ${[
-              ['Address', p.address && esc(p.address)],
+              [
+                'Address',
+                `<a href="${maps.open}" target="_blank" rel="noreferrer">${p.address ? esc(p.address) : 'Find on Google Maps'}</a>
+                 <a class="maps-go" href="${maps.directions}" target="_blank" rel="noreferrer">Directions ↗</a>`,
+              ],
               ['Phone', p.phone && `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`],
               ['E-mail', p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`],
               ['Website', p.website && `<a href="${esc(/^https?:\/\//.test(p.website) ? p.website : `https://${p.website}`)}" target="_blank" rel="noreferrer">${esc(p.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`],

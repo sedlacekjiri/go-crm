@@ -1246,3 +1246,14 @@ export function inboxItems(data, me) {
   }
   return items.sort((a, b) => (a.last.created_at < b.last.created_at ? 1 : -1));
 }
+
+// Google Maps links for a partner: opens the Maps app on phones. Name + address finds the business
+// itself (with its photos and opening hours); without an address the name and area still work.
+export function mapsUrls(p) {
+  const where = p.address ? [p.name, p.address] : [p.name, p.area?.replace(/\s*\(.*\)$/, '')];
+  const q = encodeURIComponent([...where.filter(Boolean), 'Iceland'].join(', '));
+  return {
+    open: `https://www.google.com/maps/search/?api=1&query=${q}`,
+    directions: `https://www.google.com/maps/dir/?api=1&destination=${q}`,
+  };
+}
