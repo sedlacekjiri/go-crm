@@ -6,7 +6,7 @@ import { renderOverview } from './affiliates.js';
 import { esc, openModal, options, shortDate, toast } from '../util.js';
 
 // Filters survive navigating to a partner and back.
-const filters = { query: '', stage: '', area: '', chain: '', sort: 'name' };
+const filters = { query: '', stage: '', area: '', chain: '', welcome: '', sort: 'name' };
 
 export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
@@ -49,6 +49,14 @@ export function render(page, { query, refresh, isCurrent }) {
           { empty: 'All chains' }
         )}</select>`;
       })()}
+      <select class="input" data-f="welcome" aria-label="Welcome e-mail">${options(
+        [
+          { value: 'sent', label: 'Welcome e-mail sent' },
+          { value: 'not_sent', label: 'No welcome e-mail yet' },
+        ],
+        filters.welcome,
+        { empty: 'Welcome e-mail: any' }
+      )}</select>
       <select class="input" data-f="sort" aria-label="Sort">${options(
         [
           { value: 'name', label: 'Sort: Name' },
@@ -77,6 +85,7 @@ export function render(page, { query, refresh, isCurrent }) {
         (!filters.stage || p.stage === filters.stage) &&
         (!filters.area || p.area === filters.area) &&
         (!filters.chain || (filters.chain === '__none' ? !p.chain : p.chain === filters.chain)) &&
+        (!filters.welcome || (filters.welcome === 'sent') === !!p.welcome_sent) &&
         (!q || [p.name, p.chain, p.address, p.affiliate_code, p.notes].some((v) => v && v.toLowerCase().includes(q)))
     );
     const cmp = {
@@ -93,7 +102,7 @@ export function render(page, { query, refresh, isCurrent }) {
             const meta = [p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
             return `<a class="prow" href="#/partner/${p.id}">
               <div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
-              <div class="tags">${stageBadge(p.stage)}${interestBadge(p.interest)}${
+              <div class="tags">${p.welcome_sent ? `<span class="pill good" title="Welcome e-mail sent ${shortDate(p.welcome_sent)}">✉️ ${shortDate(p.welcome_sent)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${
                 p.stage === 'accepted' ? (p.affiliate_code ? `<span class="code">${esc(p.affiliate_code)}</span>` : '') : p.stage !== 'declined' ? followUpPill(p.next_follow_up) : ''
               }</div></a>`;
           })

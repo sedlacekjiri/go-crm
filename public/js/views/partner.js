@@ -34,7 +34,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     <div class="detail-head">
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
-        <div class="badges">${p.chain ? `<span class="chain-tag">${esc(p.chain)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
+        <div class="badges">${p.chain ? `<span class="chain-tag">${esc(p.chain)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${p.welcome_sent ? `<span class="pill good">✉️ Welcome e-mail ${shortDate(p.welcome_sent)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
           <span class="muted small">${esc([typeLabel(p.type), p.area, capacityText(p), p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>
@@ -58,6 +58,12 @@ export async function render(page, { params, refresh, isCurrent }) {
                     ${p.next_follow_up ? '<button type="button" data-follow="clear">Clear</button>' : ''}</div></div>`
                 : ''
             }
+            <div class="line"><span class="lbl">Welcome e-mail</span>${
+              p.welcome_sent ? `<span class="pill good">✓ Sent ${shortDate(p.welcome_sent)}</span>` : '<span class="pill">Not sent yet</span>'
+            }
+              <div class="chips">${p.welcome_sent ? '' : '<button type="button" data-welcome="today">Sent today</button>'}
+                <input class="input welcome-date" type="date" max="${today()}" value="${p.welcome_sent ?? ''}" data-welcome-date aria-label="Date the welcome e-mail was sent" />
+                ${p.welcome_sent ? '<button type="button" data-welcome="clear">Clear</button>' : ''}</div></div>
             ${p.stage === 'declined' && p.declined_reason ? `<p class="muted" style="margin-top:12px">Declined: ${esc(p.declined_reason)}</p>` : ''}
           </section>`
             : ''
@@ -138,6 +144,20 @@ export async function render(page, { params, refresh, isCurrent }) {
     }
   };
 
+  // The first time it's marked, the e-mail also goes into the activity log (so "last contact" counts it).
+  const setWelcome = async (date) => {
+    try {
+      if (date && !p.welcome_sent) {
+        const at = date === today() ? new Date() : new Date(`${date}T12:00`);
+        await api('/api/activities', { method: 'POST', body: { partner_id: p.id, type: 'email', happened_at: at.toISOString(), summary: 'Welcome e-mail sent' } });
+      }
+      await patch({ welcome_sent: date }, date ? 'Welcome e-mail marked as sent' : 'Cleared');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  page.querySelector('[data-welcome-date]')?.addEventListener('change', (e) => setWelcome(e.target.value || null));
+
   page.onclick = async (e) => {
     const el = e.target.closest('button');
     if (!el) return;
@@ -145,6 +165,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     if (d.stage && d.stage !== p.stage) patch({ stage: d.stage }, `Moved to ${STAGES.find((s) => s.value === d.stage).label}`);
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
+    else if (d.welcome) setWelcome(d.welcome === 'clear' ? null : today());
     else if ('log' in d) logActivity(p, contacts, refresh);
     else if ('planVisit' in d) planVisits(planned ?? shiftDate(today(), 1), refresh, [p.id]);
     else if (d.contact) contactForm(p, d.contact === 'new' ? { is_primary: contacts.length === 0 } : contacts.find((c) => c.id === d.contact), refresh);
