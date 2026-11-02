@@ -368,6 +368,8 @@ export function logActivity(p, contacts, refresh) {
 }
 
 function contactForm(p, c, refresh) {
+  // A new person at a chain hotel (e.g. its sales manager) can go to the chain's other hotels too.
+  const siblings = !c.id && p.chain ? state.partners.filter((x) => x.chain === p.chain && x.id !== p.id).sort((a, b) => a.name.localeCompare(b.name)) : [];
   const m = openModal(
     c.id ? 'Edit contact' : 'New contact',
     `<form>
@@ -379,14 +381,28 @@ function contactForm(p, c, refresh) {
       </div>
       <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2" placeholder="Works mornings, prefers WhatsApp…">${esc(c.notes ?? '')}</textarea></label>
       <label class="check"><input type="checkbox" name="is_primary" ${c.is_primary ? 'checked' : ''} /> Main contact</label>
+      ${
+        siblings.length
+          ? `<fieldset class="also-add"><legend>Also add to other ${esc(p.chain)} places <button type="button" class="link-btn" data-also-all>Select all</button></legend>
+              ${siblings.map((s) => `<label class="check"><input type="checkbox" data-also value="${s.id}" /> ${esc(s.name)}</label>`).join('')}</fieldset>`
+          : ''
+      }
       <button class="btn block" type="submit">Save contact</button>
     </form>`
   );
   const form = m.el.querySelector('form');
+  m.el.querySelector('[data-also-all]')?.addEventListener('click', () => {
+    const boxes = [...m.el.querySelectorAll('[data-also]')];
+    const on = !boxes.every((b) => b.checked);
+    boxes.forEach((b) => (b.checked = on));
+  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      await api('/api/contacts', { method: 'POST', body: { ...formData(form), id: c.id, partner_id: p.id } });
+      const also = [...m.el.querySelectorAll('[data-also]:checked')].map((b) => b.value);
+      const f = formData(form);
+      await api('/api/contacts', { method: 'POST', body: { ...f, id: c.id, partner_id: p.id, also } });
+      if (also.length) toast(`Added to ${also.length + 1} places`);
       m.close();
       refresh();
     } catch (err) {

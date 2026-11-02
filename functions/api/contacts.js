@@ -1,7 +1,10 @@
 // /api/contacts (admin only) — contact people of a partner.
-//   POST   { id?, partner_id, name, role, email, phone, notes, is_primary }
+//   POST   { id?, partner_id, name, role, email, phone, notes, is_primary, also: [partner ids] }
+//          `also` (new contacts only): the same person is added to those partners too, e.g. a
+//          chain's sales manager who looks after all its hotels
 //   DELETE ?id=…
 
+import { addContactTo } from '../_lib/contacts.js';
 import { authorize, bad, json, now, readJson, str, uuid } from '../_lib/db.js';
 
 export async function onRequestPost({ request, env }) {
@@ -39,6 +42,8 @@ export async function onRequestPost({ request, env }) {
     ).bind(row.id, row.partner_id, row.name, row.role, row.email, row.phone, row.notes, row.is_primary, row.created_at)
   );
   await env.DB.batch(statements);
+  const isNew = !b.id;
+  if (isNew && Array.isArray(b.also)) await addContactTo(env.DB, b.also.filter((id) => id !== row.partner_id), row);
   return json({ ...row, is_primary: !!row.is_primary });
 }
 

@@ -197,6 +197,14 @@ function bulkEdit(list, done) {
         <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" /></label>
       </div>
       <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
+      <fieldset class="also-add"><legend>Add a contact person to all (optional)</legend>
+        <div class="form-grid">
+          <label class="field"><span>Name</span><input class="input" name="c_name" placeholder="e.g. Anna Jónsdóttir" /></label>
+          <label class="field"><span>Role</span><input class="input" name="c_role" placeholder="Sales manager" /></label>
+          <label class="field"><span>Phone</span><input class="input" type="tel" name="c_phone" /></label>
+          <label class="field"><span>E-mail</span><input class="input" type="email" name="c_email" /></label>
+        </div>
+      </fieldset>
       <p class="muted small">Empty fields stay as they are.</p>
       <button class="btn block" type="submit">Save for all ${list.length}</button>
     </form>`
@@ -220,10 +228,12 @@ function bulkEdit(list, done) {
     if (f.interest) set.interest = Number(f.interest);
     if (f.next_follow_up) set.next_follow_up = f.next_follow_up;
     if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
-    if (!Object.keys(set).length && !f.note.trim()) return toast('Nothing to change', 'error');
+    const contact = f.c_name.trim() ? { name: f.c_name, role: f.c_role, phone: f.c_phone, email: f.c_email } : null;
+    if ((f.c_role || f.c_phone || f.c_email) && !contact) return toast('Add the contact person’s name', 'error');
+    if (!Object.keys(set).length && !f.note.trim() && !contact) return toast('Nothing to change', 'error');
     if (f.day > today()) return toast('Pick a day up to today', 'error');
     try {
-      const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note } });
+      const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note, contact } });
       m.close();
       toast(`Updated ${updated} partners`);
       done();

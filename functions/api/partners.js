@@ -1,12 +1,13 @@
 // /api/partners (admin only)
 //   POST   { id?, ...fields }            create, or update only the fields that are sent
 //   POST   { bulk: [names], type, area, chain } add many partners at once (existing names are skipped)
-//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent }, visited_on, note }
+//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent }, visited_on, note, contact }
 //          change several partners at once (e.g. one meeting about a whole hotel chain)
 //   DELETE ?id=…                          delete a partner with its contacts and activity log
 
 import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
 import { savePartner, TYPES } from '../_lib/partners.js';
+import { addContactTo } from '../_lib/contacts.js';
 
 const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent'];
 
@@ -16,6 +17,11 @@ async function bulkUpdate(env, body) {
   const set = Object.fromEntries(BULK_FIELDS.filter((k) => body.set && k in body.set).map((k) => [k, body.set[k]]));
   const note = str(body.note, 5000);
   const { results } = await env.DB.prepare(`SELECT * FROM partners WHERE id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).all();
+  // Optional: the same contact person added to every selected partner.
+  const contact = body.contact && str(body.contact.name, 200)
+    ? { name: str(body.contact.name, 200), role: str(body.contact.role, 200), email: str(body.contact.email, 200), phone: str(body.contact.phone, 60), notes: null }
+    : null;
+  if (contact) await addContactTo(env.DB, results.map((p) => p.id), contact);
   let updated = 0;
   for (const p of results) {
     const r = await savePartner(env.DB, { id: p.id, ...set, visited_on: body.visited_on, visit_note: note });
