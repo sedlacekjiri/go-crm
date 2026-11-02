@@ -1,6 +1,7 @@
 // /api/activities (admin only) — the visit / call / e-mail log.
 //   POST   { partner_id, type, happened_at, contact_id, summary, partner: { stage, next_follow_up } }
 //          `partner` is optional: logging a visit can move the partner on and set the next follow-up.
+//   PATCH  { id, happened_at }   correct when it happened
 //   DELETE ?id=…
 
 import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
@@ -55,6 +56,18 @@ export async function onRequestPost({ request, env }) {
     }
   }
   return json(row);
+}
+
+export async function onRequestPatch({ request, env }) {
+  const auth = await authorize(request, env, { write: true, section: 'sales' });
+  if (auth instanceof Response) return auth;
+  const b = await readJson(request);
+  const when = new Date(b?.happened_at ?? '');
+  if (Number.isNaN(when.getTime())) return bad('Invalid date');
+  if (when.getTime() > Date.now() + 86400000) return bad('That date is in the future');
+  const { meta } = await env.DB.prepare('UPDATE activities SET happened_at = ? WHERE id = ?').bind(when.toISOString(), str(b.id, 64)).run();
+  if (!meta.changes) return bad('Entry not found', 404);
+  return json({ ok: true, happened_at: when.toISOString() });
 }
 
 export async function onRequestDelete({ request, env }) {

@@ -1,16 +1,53 @@
 // /api/partners (admin only)
 //   POST   { id?, ...fields }            create, or update only the fields that are sent
 //   POST   { bulk: [names], type, area, chain } add many partners at once (existing names are skipped)
+//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent }, visited_on, note }
+//          change several partners at once (e.g. one meeting about a whole hotel chain)
 //   DELETE ?id=…                          delete a partner with its contacts and activity log
 
-import { authorize, bad, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
 import { savePartner, TYPES } from '../_lib/partners.js';
+
+const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent'];
+
+async function bulkUpdate(env, body) {
+  const ids = [...new Set(body.ids.map((id) => str(id, 64)).filter(Boolean))].slice(0, 500);
+  if (!ids.length) return bad('Nothing selected');
+  const set = Object.fromEntries(BULK_FIELDS.filter((k) => body.set && k in body.set).map((k) => [k, body.set[k]]));
+  const note = str(body.note, 5000);
+  const { results } = await env.DB.prepare(`SELECT * FROM partners WHERE id IN (${ids.map(() => '?').join(', ')})`).bind(...ids).all();
+  let updated = 0;
+  for (const p of results) {
+    const r = await savePartner(env.DB, { id: p.id, ...set, visited_on: body.visited_on, visit_note: note });
+    if (r.error) return bad(`${p.name}: ${r.error}`, r.status);
+    // A note goes into every partner's history: with the visit when it leaves "To visit",
+    // otherwise as a meeting on that day (one talk with a manager about the whole chain).
+    const leftToVisit = p.stage === 'new' && set.stage && set.stage !== 'new';
+    if (note && !leftToVisit) {
+      const day = isDate(body.visited_on) && body.visited_on <= now().slice(0, 10) ? body.visited_on : null;
+      await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'meeting', ?, ?, ?)`)
+        .bind(uuid(), p.id, day ? `${day}T12:00:00.000Z` : now(), note, now())
+        .run();
+    }
+    // Same as on the partner page: the first welcome e-mail also goes into the activity history.
+    if (isDate(set.welcome_sent) && !p.welcome_sent) {
+      const at = set.welcome_sent === now().slice(0, 10) ? now() : `${set.welcome_sent}T12:00:00.000Z`;
+      await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'email', ?, 'Welcome e-mail sent', ?)`)
+        .bind(uuid(), p.id, at, now())
+        .run();
+    }
+    updated++;
+  }
+  return json({ updated });
+}
 
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
   const body = await readJson(request);
   if (!body || typeof body !== 'object') return bad('Invalid request');
+
+  if (Array.isArray(body.ids)) return bulkUpdate(env, body);
 
   if (Array.isArray(body.bulk)) {
     const existing = await env.DB.prepare('SELECT lower(name) AS n FROM partners').all();

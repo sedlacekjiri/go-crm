@@ -1,12 +1,15 @@
 // Partner list with type tabs, search, area / stage filters and bulk add.
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
-import { AREAS, capacityText, chainCounts, chainSuggestions, PARTNER_TYPES, STAGES, visitStats } from '../lib.js';
+import { AREAS, capacityText, chainCounts, chainSuggestions, INTEREST, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { renderOverview } from './affiliates.js';
-import { esc, openModal, options, shortDate, toast } from '../util.js';
+import { esc, formData, openModal, options, shortDate, toast } from '../util.js';
 
 // Filters survive navigating to a partner and back.
 const filters = { query: '', stage: '', area: '', chain: '', welcome: '', sort: 'name' };
+// Select mode: tick several partners and change them at once.
+let selecting = false;
+const selected = new Set();
 
 export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
@@ -33,7 +36,7 @@ export function render(page, { query, refresh, isCurrent }) {
     ${pageHeader(
       'Partners',
       'Hotels, guesthouses, hostels, campsites, OTAs and cafés',
-      isAdmin() ? `<button class="btn secondary" data-bulk>Add many at once</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
+      isAdmin() ? `<button class="btn secondary" data-select-mode>${selecting ? 'Done selecting' : 'Select'}</button><button class="btn secondary" data-bulk>Add many at once</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
     )}
     ${tabs}
     <div class="toolbar">
@@ -75,6 +78,7 @@ export function render(page, { query, refresh, isCurrent }) {
           }</button>`
       )
       .join('')}</div>
+    <div class="bulk-bar" data-bulk-bar hidden></div>
     <div id="list"></div>`;
 
   const drawList = () => {
@@ -95,13 +99,23 @@ export function render(page, { query, refresh, isCurrent }) {
       rooms: (a, b) => (b.rooms ?? -1) - (a.rooms ?? -1),
     }[filters.sort];
     rows.sort(cmp);
+    shown = rows;
+    const bar = page.querySelector('[data-bulk-bar]');
+    bar.hidden = !selecting;
+    if (selecting) {
+      const allOn = rows.length && rows.every((p) => selected.has(p.id));
+      bar.innerHTML = `<b>${selected.size} selected</b>
+        <button type="button" class="link-btn" data-sel-all>${allOn ? 'Unselect' : 'Select'} all shown (${rows.length})</button>
+        ${selected.size ? '<button type="button" class="link-btn muted" data-sel-none>Clear</button>' : ''}
+        <button type="button" class="btn sm" data-sel-edit ${selected.size ? '' : 'disabled'}>Change ${selected.size || ''} at once…</button>`;
+    }
     page.querySelector('#list').innerHTML = rows.length
       ? `<div class="plist">${rows
           .map((p) => {
             const v = visits.get(p.id);
             const meta = [p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
-            return `<a class="prow" href="#/partner/${p.id}">
-              <div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
+            return `<a class="prow${selecting ? ' selecting' : ''}${selected.has(p.id) ? ' on' : ''}" href="#/partner/${p.id}" data-pid="${p.id}">
+              ${selecting ? '<span class="pick" aria-hidden="true"></span>' : ''}<div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
               <div class="tags">${p.welcome_sent ? `<span class="pill good" title="Welcome e-mail sent ${shortDate(p.welcome_sent)}">✉️ ${shortDate(p.welcome_sent)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${
                 p.stage === 'accepted' ? (p.affiliate_code ? `<span class="code">${esc(p.affiliate_code)}</span>` : '') : p.stage !== 'declined' ? followUpPill(p.next_follow_up) : ''
               }</div></a>`;
@@ -109,7 +123,40 @@ export function render(page, { query, refresh, isCurrent }) {
           .join('')}</div>`
       : emptyBox(`No ${typeInfo.label.toLowerCase()} here yet`, isAdmin() ? 'Add one, or use Bulk add to paste a whole list of names.' : '');
   };
+  let shown = [];
   drawList();
+
+  page.querySelector('#list').addEventListener('click', (e) => {
+    const row = selecting && e.target.closest('[data-pid]');
+    if (!row) return;
+    e.preventDefault();
+    if (selected.has(row.dataset.pid)) selected.delete(row.dataset.pid);
+    else selected.add(row.dataset.pid);
+    drawList();
+  });
+  page.querySelector('[data-bulk-bar]').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if ('selAll' in b.dataset) {
+      const allOn = shown.every((p) => selected.has(p.id));
+      shown.forEach((p) => (allOn ? selected.delete(p.id) : selected.add(p.id)));
+    } else if ('selNone' in b.dataset) selected.clear();
+    else if ('selEdit' in b.dataset)
+      return bulkEdit(
+        state.partners.filter((p) => selected.has(p.id)),
+        () => {
+          selected.clear();
+          selecting = false;
+          refresh();
+        }
+      );
+    drawList();
+  });
+  page.querySelector('[data-select-mode]')?.addEventListener('click', () => {
+    selecting = !selecting;
+    if (!selecting) selected.clear();
+    render(page, { query, refresh, isCurrent });
+  });
 
   page.querySelector('[data-f="query"]').addEventListener('input', (e) => {
     filters.query = e.target.value;
@@ -129,6 +176,61 @@ export function render(page, { query, refresh, isCurrent }) {
     drawList();
   });
   page.querySelector('[data-bulk]')?.addEventListener('click', () => bulkAdd(type, refresh));
+}
+
+// One window for many partners: stage (with the visit date), a note for their history, interest,
+// follow-up, welcome e-mail. Empty fields stay as they are.
+function bulkEdit(list, done) {
+  const toVisit = list.filter((p) => p.stage === 'new').length;
+  const m = openModal(
+    `Change ${list.length} partners`,
+    `<form>
+      <p class="muted small" style="margin:0 0 12px">${esc(list.slice(0, 6).map((p) => p.name).join(', '))}${list.length > 6 ? ` and ${list.length - 6} more` : ''}</p>
+      <div class="form-grid">
+        <label class="field"><span>Stage</span><select class="input" name="stage">${options(STAGES, '', { empty: 'No change' })}</select></label>
+        <label class="field"><span>Date of the visit / meeting</span><input class="input" type="date" name="day" value="${today()}" max="${today()}" /></label>
+      </div>
+      <small class="muted" data-visit-hint></small>
+      <label class="field"><span>Note for their history (optional)</span><textarea class="input" name="note" rows="3" placeholder="Met the Center Hotels sales manager – talked about all their hotels, flyers to every reception…"></textarea></label>
+      <div class="form-grid">
+        <label class="field"><span>Interest</span><select class="input" name="interest">${options(INTEREST, '', { empty: 'No change' })}</select></label>
+        <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" /></label>
+      </div>
+      <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
+      <p class="muted small">Empty fields stay as they are.</p>
+      <button class="btn block" type="submit">Save for all ${list.length}</button>
+    </form>`
+  );
+  const form = m.el.querySelector('form');
+  const hint = () => {
+    const leaving = form.stage.value && form.stage.value !== 'new' && toVisit;
+    m.el.querySelector('[data-visit-hint]').textContent = leaving
+      ? `${toVisit} of them are “To visit” – each gets a visit logged on this date.`
+      : form.note.value.trim()
+        ? 'The note is saved as a meeting on this date.'
+        : '';
+  };
+  form.stage.addEventListener('change', hint);
+  form.note.addEventListener('input', hint);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = formData(form);
+    const set = {};
+    if (f.stage) set.stage = f.stage;
+    if (f.interest) set.interest = Number(f.interest);
+    if (f.next_follow_up) set.next_follow_up = f.next_follow_up;
+    if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
+    if (!Object.keys(set).length && !f.note.trim()) return toast('Nothing to change', 'error');
+    if (f.day > today()) return toast('Pick a day up to today', 'error');
+    try {
+      const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note } });
+      m.close();
+      toast(`Updated ${updated} partners`);
+      done();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
 }
 
 function bulkAdd(type, refresh) {

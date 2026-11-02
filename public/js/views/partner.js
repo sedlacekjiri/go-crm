@@ -77,7 +77,7 @@ export async function render(page, { params, refresh, isCurrent }) {
                   .map((a) => {
                     const who = contacts.find((c) => c.id === a.contact_id);
                     return `<li><div class="when"><b>${esc(activityLabel(a.type))}</b><span>${dateTime(a.happened_at)}</span>${who ? `<span>with ${esc(who.name)}</span>` : ''}
-                      ${admin ? `<button class="link-btn muted" style="margin-left:auto" data-del-activity="${a.id}">Delete</button>` : ''}</div>
+                      ${admin ? `<span style="margin-left:auto"><button class="link-btn muted" data-date-activity="${a.id}">Change date</button> <button class="link-btn muted" data-del-activity="${a.id}">Delete</button></span>` : ''}</div>
                       ${a.summary ? `<p>${esc(a.summary)}</p>` : ''}</li>`;
                   })
                   .join('')}</ol>`
@@ -162,7 +162,12 @@ export async function render(page, { params, refresh, isCurrent }) {
     const el = e.target.closest('button');
     if (!el) return;
     const d = el.dataset;
-    if (d.stage && d.stage !== p.stage) patch({ stage: d.stage }, `Moved to ${STAGES.find((s) => s.value === d.stage).label}`);
+    if (d.stage && d.stage !== p.stage) {
+      const moved = `Moved to ${STAGES.find((s) => s.value === d.stage).label}`;
+      if (p.stage !== 'new') return patch({ stage: d.stage }, moved);
+      const day = await askVisitDate(p);
+      if (day) patch({ stage: d.stage, visited_on: day }, moved);
+    } else if (d.dateActivity) activityDate(activities.find((a) => a.id === d.dateActivity), refresh);
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
     else if (d.welcome) setWelcome(d.welcome === 'clear' ? null : today());
@@ -245,6 +250,62 @@ async function renderPerformance(page, p, cur, isCurrent, refresh) {
   el.querySelector('[data-copy]')?.addEventListener('click', () => copyText(p.affiliate_url));
   el.querySelector('[data-add-aff]')?.addEventListener('click', () => affiliateModal({ partner_id: p.id }, p, refresh));
   wireAffiliateRows(el, allSales, refresh);
+}
+
+// Leaving "To visit" records a visit: ask which day it was, since it's often confirmed later.
+// Resolves with the date, or never if the window is closed.
+export function askVisitDate(p) {
+  return new Promise((resolve) => {
+    const m = openModal(
+      `When did you visit ${p.name}?`,
+      `<form>
+        <div class="chips">${[0, 1, 2, 3].map((n) => `<button type="button" data-ago="${n}" aria-pressed="${n === 0}">${n === 0 ? 'Today' : n === 1 ? 'Yesterday' : shortDate(shiftDate(today(), -n))}</button>`).join('')}</div>
+        <label class="field"><span>Date of the visit</span><input class="input" type="date" name="day" value="${today()}" max="${today()}" required /></label>
+        <button class="btn block" type="submit">Save</button>
+      </form>`
+    );
+    const form = m.el.querySelector('form');
+    const mark = () => m.el.querySelectorAll('[data-ago]').forEach((b) => b.setAttribute('aria-pressed', String(shiftDate(today(), -Number(b.dataset.ago)) === form.day.value)));
+    m.el.querySelectorAll('[data-ago]').forEach((b) =>
+      b.addEventListener('click', () => {
+        form.day.value = shiftDate(today(), -Number(b.dataset.ago));
+        mark();
+      })
+    );
+    form.day.addEventListener('input', mark);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!form.day.value || form.day.value > today()) return toast('Pick a day up to today', 'error');
+      m.close();
+      resolve(form.day.value);
+    });
+  });
+}
+
+// Correct when a logged visit / call / e-mail happened.
+function activityDate(a, refresh) {
+  if (!a) return;
+  const d = new Date(a.happened_at);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  const m = openModal(
+    `Change date – ${activityLabel(a.type)}`,
+    `<form>
+      <label class="field"><span>When it happened</span><input class="input" type="datetime-local" name="when" value="${d.toISOString().slice(0, 16)}" max="${nowLocalInput()}" required /></label>
+      <button class="btn block" type="submit">Save</button>
+    </form>`
+  );
+  const form = m.el.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/activities', { method: 'PATCH', body: { id: a.id, happened_at: new Date(form.when.value).toISOString() } });
+      m.close();
+      toast('Date changed');
+      refresh();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
 }
 
 export function logActivity(p, contacts, refresh) {

@@ -4,6 +4,7 @@ import { followUpPill, interestBadge, kpi, pageHeader } from '../components.js';
 import { capacityText, nextPlannedVisit, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, options, shortDate, toast } from '../util.js';
+import { askVisitDate } from './partner.js';
 
 let typeFilter = '';
 
@@ -75,9 +76,10 @@ export function render(page, { refresh }) {
     const p = state.partners.find((x) => x.id === b.dataset.move);
     const next = order[order.indexOf(p.stage) + Number(b.dataset.dir)];
     if (!next) return;
+    const visited_on = p.stage === 'new' ? await askVisitDate(p) : undefined;
     b.closest('.kcard').style.opacity = 0.5;
     try {
-      await api('/api/partners', { method: 'POST', body: { id: p.id, stage: next } });
+      await api('/api/partners', { method: 'POST', body: { id: p.id, stage: next, visited_on } });
       refresh();
     } catch (err) {
       toast(err.message, 'error');

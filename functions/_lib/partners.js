@@ -54,23 +54,28 @@ export async function savePartner(db, body, { visitLogged = false } = {}) {
     .run();
 
   // Leaving "To visit" means you've been there: record a visit (unless one is already logged
-  // today), so it counts in Goals and the visit history, and tick off any planned visit.
-  if (!visitLogged && (!existing || existing.stage === 'new') && row.stage !== 'new') await recordVisit(db, row.id);
+  // that day), so it counts in Goals and the visit history, and tick off any planned visit.
+  // body.visited_on: the day it actually happened, when it's confirmed later.
+  const visitedOn = isDate(body.visited_on) && body.visited_on <= now().slice(0, 10) ? body.visited_on : null;
+  if (!visitLogged && (!existing || existing.stage === 'new') && row.stage !== 'new') await recordVisit(db, row.id, visitedOn, str(body.visit_note, 5000));
   return { partner: row };
 }
 
-export async function recordVisit(db, partnerId) {
-  const day = now().slice(0, 10);
+export async function recordVisit(db, partnerId, visitedOn = null, note = null) {
+  const today = now().slice(0, 10);
+  const day = visitedOn ?? today;
   const already = await db
     .prepare(`SELECT 1 FROM activities WHERE partner_id = ? AND type IN ('visit', 'meeting') AND substr(happened_at, 1, 10) = ?`)
     .bind(partnerId, day)
     .first();
   if (already) return;
   const t = now();
+  const at = day === today ? t : `${day}T12:00:00.000Z`;
   await db.batch([
     db
-      .prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'visit', ?, 'Marked as visited', ?)`)
-      .bind(uuid(), partnerId, t, t),
-    db.prepare(`UPDATE tasks SET done = 1, done_at = ? WHERE partner_id = ? AND type = 'visit' AND done = 0 AND due_date <= ?`).bind(t, partnerId, day),
+      .prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'visit', ?, ?, ?)`)
+      .bind(uuid(), partnerId, at, note || 'Marked as visited', t),
+    // Planned visits up to today are this visit, even when it's confirmed a few days late.
+    db.prepare(`UPDATE tasks SET done = 1, done_at = ? WHERE partner_id = ? AND type = 'visit' AND done = 0 AND due_date <= ?`).bind(t, partnerId, today),
   ]);
 }
