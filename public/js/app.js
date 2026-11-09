@@ -179,7 +179,7 @@ function onComments() {
   updateBadges();
   if (!document.querySelector('#page :focus')) render();
 }
-$('[data-tv-label]').textContent = storage.get('go-crm-view') === 'tv' ? 'Laptop view' : 'TV view';
+setTvLabel();
 window.addEventListener('go-crm:comments', onComments);
 
 // New comments from colleagues: check every minute while the CRM is open.
@@ -198,7 +198,7 @@ document.addEventListener('visibilitychange', pollComments);
 
 function buildNav() {
   const item = (n) =>
-    `<a href="${n.href}" data-nav="${n.key}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
+    `<a href="${n.href}" data-nav="${n.key}" title="${n.label}">${n.icon}<span>${n.label}</span>${n.key === 'tasks' ? '<em class="badge-count" hidden title="Due today or overdue"></em>' : ''}</a>`;
   const items = allowedNav();
   $('#nav').innerHTML = grouped(items, item, (g) => `<div class="nav-label">${g}</div>`);
   // Phones: the most used sections as tabs, the rest under "More".
@@ -276,6 +276,7 @@ document.addEventListener('click', (e) => {
   if (action === 'profile') return team.profileModal(() => (buildNav(), render()));
   if (action === 'team') return navigate('#/team');
   if (action === 'theme') toggleTheme();
+  if (action === 'side') toggleSide();
   if (action === 'tv') toggleTv();
   if (action === 'tv-size') tvSize(Number(e.target.closest('[data-action]').dataset.step));
   if (action === 'logout') logout();
@@ -355,10 +356,26 @@ function toggleTheme() {
   render(); // charts read colors from CSS
 }
 
+// Side panel: full, or only its icons so the page gets the room. Remembered per device.
+function toggleSide() {
+  const root = document.documentElement;
+  const mini = !root.hasAttribute('data-side');
+  if (mini) root.setAttribute('data-side', 'mini');
+  else root.removeAttribute('data-side');
+  storage.set('go-crm-side', mini ? 'mini' : 'full');
+  render(); // charts are drawn to the width they have
+}
+
 // TV view: the fit itself lives in index.html (it has to run before the first paint).
+function setTvLabel() {
+  const label = storage.get('go-crm-view') === 'tv' ? 'Laptop view' : 'TV view';
+  $('[data-tv-label]').textContent = label;
+  $('[data-action="tv"]').title = label;
+}
+
 function paintTv() {
   window.goTvFit();
-  $('[data-tv-label]').textContent = storage.get('go-crm-view') === 'tv' ? 'Laptop view' : 'TV view';
+  setTvLabel();
   render(); // charts are drawn to the width they have
 }
 

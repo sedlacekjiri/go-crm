@@ -1294,3 +1294,30 @@ dl.details .maps-go { display: inline-block; margin-left: 8px; font-size: 12px; 
   html[data-tv] .tv-size button { border: 1px solid var(--side-line); background: transparent; color: var(--side-text); border-radius: 7px; padding: 2px 8px; font: inherit; font-weight: 700; cursor: pointer; }
   html[data-tv] .tv-size button:hover { background: var(--side-hover); }
 }
+
+/* Side panel: collapse button, and the icons-only version */
+.side-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.side-toggle { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--side-muted); cursor: pointer; }
+.side-toggle:hover { background: var(--side-hover); color: #fff; }
+.side-toggle svg { width: 16px; height: 16px; }
+.sidebar .side-top .logo { padding-right: 0; min-width: 0; }
+@media (min-width: 861px) {
+  html[data-side] .app { grid-template-columns: 64px minmax(0, 1fr); }
+  html[data-side]:not([data-tv]) .wrap { max-width: 1372px; } /* the room the panel gave up */
+  html[data-side] .sidebar { padding-inline: 10px; }
+  html[data-side] .side-top { flex-direction: column; gap: 10px; }
+  html[data-side] .side-top .logo { padding: 2px 0 0; }
+  html[data-side] .side-top .logo span { display: none; }
+  html[data-side] .side-top .logo img { height: 16px; }
+  html[data-side] .side-toggle svg { transform: rotate(180deg); }
+  html[data-side] .nav a { position: relative; justify-content: center; padding: 0; height: 40px; }
+  html[data-side] .nav a > span { display: none; }
+  html[data-side] .nav a .badge-count { position: absolute; top: 1px; right: 0; margin: 0; padding: 0 4px; font-size: 10px; }
+  html[data-side] .nav-label { height: 1px; padding: 0; margin: 9px 8px; overflow: hidden; color: transparent; background: var(--side-line); }
+  html[data-side] .side-btn { justify-content: center; padding: 9px 0; }
+  html[data-side] .side-btn .txt, html[data-side] .me-text { display: none; }
+  html[data-side] .me-chip { justify-content: center; padding: 6px 0; }
+  html[data-side] .tv-size { flex-direction: column; padding: 2px 0; }
+  html[data-side] .tv-size span { display: none; }
+  html[data-side] .tv-size button { width: 100%; padding: 2px 0; }
+}
