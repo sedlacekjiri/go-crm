@@ -1257,3 +1257,102 @@ export function mapsUrls(p) {
     directions: `https://www.google.com/maps/dir/?api=1&destination=${q}`,
   };
 }
+
+// ── Marketing report on Home (people with Marketing but not Sales) ──
+const MONTHS_SHOWN = 6;
+const sumBy = (list, f) => list.reduce((a, x) => a + (f(x) ?? 0), 0);
+
+function monthsUpTo(t, n) {
+  const [y, m] = t.split('-').map(Number);
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 - (n - 1 - i), 1));
+    return d.toISOString().slice(0, 7);
+  });
+}
+
+// Followers gained per channel since the period began, at each count, for one shared scale (the
+// channels are far apart in size). Only accounts counted by then, so a new account isn't a jump.
+function followerGains(social, from, t) {
+  return SOCIAL_CHANNELS.map((channel) => {
+    const history = SOCIAL_BRANDS.map((b) => social.filter((r) => r.account === `${channel}:${b}` && r.date <= t).sort((x, y) => x.date.localeCompare(y.date)));
+    const base = history.map((h) => h.filter((r) => r.date <= from).at(-1) ?? h.find((r) => r.date > from) ?? null);
+    const on = (h, d) => h.filter((r) => r.date <= d).at(-1) ?? null;
+    const dates = [...new Set(history.flat().map((r) => r.date).filter((d) => d > from))].sort();
+    const gainAt = (d) => history.reduce((sum, h, i) => (base[i] && on(h, d) ? sum + on(h, d).followers - base[i].followers : sum), 0);
+    return { channel, points: dates.length ? [{ date: from, value: 0 }, ...dates.map((date) => ({ date, value: gainAt(date) }))] : [] };
+  });
+}
+
+// `assignee` tells who a task belongs to (the store knows; lib doesn't).
+export function marketingReport({ tasks = [], collaborators = [], posts = [], social = [] }, days, assignee, t = today()) {
+  const from = shiftDate(t, -(days - 1));
+  const daily = days <= 7;
+
+  // Posts that went live, per day (7 days) or per week.
+  const buckets = [];
+  for (let d = daily ? from : mondayOf(from); d <= t; d = shiftDate(d, daily ? 1 : 7)) buckets.push({ key: d, car: 0, camper: 0, both: 0 });
+  const live = posts.filter((p) => p.status === 'published' && inRange(wentLive(p), from, t));
+  for (const p of live) {
+    const key = daily ? wentLive(p) : mondayOf(wentLive(p));
+    const b = buckets.find((x) => x.key === key);
+    if (b) b[p.brand === 'car' || p.brand === 'camper' ? p.brand : 'both']++;
+  }
+
+  // Marketing to-dos per person: finished in the period, still open, overdue.
+  const doneOn = (x) => (x.done_at ? today(new Date(x.done_at)) : x.due_date);
+  const people = new Map();
+  const row = (id) => people.get(id) ?? people.set(id, { id, done: 0, open: 0, overdue: 0 }).get(id);
+  for (const x of tasks) {
+    if (x.type === 'visit' || (x.category || 'sales') !== 'marketing') continue;
+    const id = assignee(x) ?? null;
+    if (!x.done) row(id)[x.due_date < t ? 'overdue' : 'open']++;
+    else if (inRange(doneOn(x), from, t)) row(id).done++;
+  }
+  const team = [...people.values()].sort((a, b) => b.overdue + b.open + b.done - (a.overdue + a.open + a.done));
+
+  // Collaborations: counted in the month / period of the trip, declined ones left out.
+  const collabs = collaborators.filter((c) => c.status !== 'declined');
+  const delivered = (c) => !!c.content_delivered || c.status === 'delivered' || c.status === 'done';
+  const dayOf = (c) => c.pickup_date || (c.created_at ?? '').slice(0, 10);
+  const inPeriod = collabs.filter((c) => inRange(dayOf(c), from, t));
+  const months = monthsUpTo(t, MONTHS_SHOWN).map((key) => {
+    const list = collabs.filter((c) => dayOf(c).slice(0, 7) === key);
+    return { key, delivered: list.filter(delivered).length, waiting: list.filter((c) => !delivered(c)).length };
+  });
+  const waiting = collabs
+    .filter((c) => c.status === 'agreed' && !delivered(c) && c.dropoff_date && c.dropoff_date < t)
+    .sort((a, b) => a.dropoff_date.localeCompare(b.dropoff_date));
+  const refundsDue = collabs.filter((c) => c.status === 'delivered' && c.refund_eur);
+
+  const gains = followerGains(social, from, t);
+  const followers = socialSummary(social, t).map((s, i) => ({ ...s, gained: gains[i].points.at(-1)?.value ?? null }));
+
+  return {
+    from,
+    daily,
+    posts: { total: live.length, buckets },
+    team,
+    taskTotals: { done: sumBy(team, (p) => p.done), open: sumBy(team, (p) => p.open), overdue: sumBy(team, (p) => p.overdue) },
+    collabs: {
+      total: inPeriod.length,
+      reach: sumBy(inPeriod, (c) => c.followers),
+      delivered: inPeriod.filter(delivered).length,
+      months,
+      waiting,
+      refundsDue: refundsDue.length,
+      refundsEur: sumBy(refundsDue, (c) => c.refund_eur),
+    },
+    followers,
+    gains,
+  };
+}
+
+// Google rating per tracked place, with reviews gained in the period. `reviews`: /api/reviews.
+export function reportPlaces(reviews, from) {
+  const places = (reviews?.places ?? []).filter((p) => p.rating_count != null);
+  return places.map((p) => {
+    const snaps = (reviews.snapshots ?? []).filter((s) => s.place_id === p.place_id).sort((a, b) => a.day.localeCompare(b.day));
+    const base = snaps.filter((s) => s.day <= from).at(-1) ?? snaps[0];
+    return { name: p.name, rating: p.rating, total: p.rating_count, gained: base ? p.rating_count - base.rating_count : null };
+  });
+}

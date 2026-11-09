@@ -23,6 +23,7 @@ import {
 } from '../lib.js';
 import { can, currency, isAdmin, loadSales, state, assigneeId, taskPerson } from '../store.js';
 import { dateTime, esc, money, monthLabel, num, pct, shortDate } from '../util.js';
+import { renderMarketingReport } from './mkt-report.js';
 
 export async function render(page, { isCurrent }) {
   const t = today();
@@ -31,7 +32,7 @@ export async function render(page, { isCurrent }) {
   const from = `${month}-01` < chartFrom ? `${month}-01` : chartFrom;
   const cur = currency.value;
 
-  if (!can('sales')) return renderLite(page);
+  if (!can('sales')) return renderLite(page, isCurrent);
 
   page.innerHTML = '<div class="loading">Loading…</div>';
   const sales = await loadSales(from, t);
@@ -159,7 +160,7 @@ export async function render(page, { isCurrent }) {
 }
 
 // Home for people without Sales access: their day, their open tasks and – with Marketing – how content is going.
-function renderLite(page) {
+function renderLite(page, isCurrent) {
   const t = today();
   const me = state.me;
   const mine = state.tasks.filter((x) => !x.done && x.type !== 'visit' && (assigneeId(x) === me?.id || (x.subtasks ?? []).some((s) => s.assignee_id === me?.id && !s.done)));
@@ -204,5 +205,7 @@ function renderLite(page) {
             : '<p class="empty">No open tasks assigned to you.</p>'
         }
       </section>
-    </div>`;
+    </div>
+    ${can('marketing') ? '<div id="mktReport"></div>' : ''}`;
+  if (can('marketing')) renderMarketingReport(page.querySelector('#mktReport'), isCurrent);
 }
