@@ -179,6 +179,7 @@ function onComments() {
   updateBadges();
   if (!document.querySelector('#page :focus')) render();
 }
+$('[data-tv-label]').textContent = storage.get('go-crm-view') === 'tv' ? 'Laptop view' : 'TV view';
 window.addEventListener('go-crm:comments', onComments);
 
 // New comments from colleagues: check every minute while the CRM is open.
@@ -275,6 +276,8 @@ document.addEventListener('click', (e) => {
   if (action === 'profile') return team.profileModal(() => (buildNav(), render()));
   if (action === 'team') return navigate('#/team');
   if (action === 'theme') toggleTheme();
+  if (action === 'tv') toggleTv();
+  if (action === 'tv-size') tvSize(Number(e.target.closest('[data-action]').dataset.step));
   if (action === 'logout') logout();
   if (action === 'menu') {
     const m = openModal(
@@ -350,6 +353,24 @@ function toggleTheme() {
   root.setAttribute('data-theme', next);
   storage.set('go-crm-theme', next);
   render(); // charts read colors from CSS
+}
+
+// TV view: the fit itself lives in index.html (it has to run before the first paint).
+function paintTv() {
+  window.goTvFit();
+  $('[data-tv-label]').textContent = storage.get('go-crm-view') === 'tv' ? 'Laptop view' : 'TV view';
+  render(); // charts are drawn to the width they have
+}
+
+function toggleTv() {
+  storage.set('go-crm-view', storage.get('go-crm-view') === 'tv' ? 'normal' : 'tv');
+  paintTv();
+}
+
+function tvSize(step) {
+  const size = Number(storage.get('go-crm-tv-size')) || 1;
+  storage.set('go-crm-tv-size', String(Math.min(1.6, Math.max(0.6, Math.round((size + step) * 10) / 10))));
+  paintTv();
 }
 
 async function logout() {

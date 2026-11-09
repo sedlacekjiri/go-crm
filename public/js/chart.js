@@ -105,7 +105,8 @@ export function revenueChart(el, points, { currency, granularity, height }) {
     };
     svg.onpointermove = (e) => {
       const rect = svg.getBoundingClientRect();
-      const i = Math.floor((e.clientX - rect.left - pad.l) / slot);
+      // rect is in screen pixels, which differ from the chart's own while TV view scales the page
+      const i = Math.floor(((e.clientX - rect.left) * (W / rect.width) - pad.l) / slot);
       if (i >= 0 && i < points.length) show(i);
       else hide();
     };
