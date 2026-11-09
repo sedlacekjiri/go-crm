@@ -1,7 +1,7 @@
 // /api/partners (admin only)
 //   POST   { id?, ...fields }            create, or update only the fields that are sent
 //   POST   { bulk: [names], type, area, chain } add many partners at once (existing names are skipped)
-//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent }, visited_on, note, contact }
+//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent }, visited_on, note, contact, followup_mail }
 //          change several partners at once (e.g. one meeting about a whole hotel chain)
 //   DELETE ?id=…                          delete a partner with its contacts and activity log
 
@@ -22,14 +22,21 @@ async function bulkUpdate(env, body) {
     ? { name: str(body.contact.name, 200), role: str(body.contact.role, 200), email: str(body.contact.email, 200), phone: str(body.contact.phone, 60), notes: null }
     : null;
   if (contact) await addContactTo(env.DB, results.map((p) => p.id), contact);
+  const today = now().slice(0, 10);
+  const followUp = isDate(body.followup_mail) && body.followup_mail <= today ? body.followup_mail : null;
+  const dayAt = (day) => (day === today ? now() : `${day}T12:00:00.000Z`);
   let updated = 0;
   for (const p of results) {
     const r = await savePartner(env.DB, { id: p.id, ...set, visited_on: body.visited_on, visit_note: note });
     if (r.error) return bad(`${p.name}: ${r.error}`, r.status);
-    // A note goes into every partner's history: with the visit when it leaves "To visit",
-    // otherwise as a meeting on that day (one talk with a manager about the whole chain).
+    // A note goes into every partner's history: with the visit when it leaves "To visit", else with
+    // the follow-up e-mail, else as a meeting on that day (one talk about the whole chain).
     const leftToVisit = p.stage === 'new' && set.stage && set.stage !== 'new';
-    if (note && !leftToVisit) {
+    if (followUp) {
+      await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'followup', ?, ?, ?)`)
+        .bind(uuid(), p.id, dayAt(followUp), leftToVisit ? null : note, now())
+        .run();
+    } else if (note && !leftToVisit) {
       const day = isDate(body.visited_on) && body.visited_on <= now().slice(0, 10) ? body.visited_on : null;
       await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'meeting', ?, ?, ?)`)
         .bind(uuid(), p.id, day ? `${day}T12:00:00.000Z` : now(), note, now())

@@ -196,7 +196,10 @@ function bulkEdit(list, done) {
         <label class="field"><span>Interest</span><select class="input" name="interest">${options(INTEREST, '', { empty: 'No change' })}</select></label>
         <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" /></label>
       </div>
-      <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
+      <div class="form-grid">
+        <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
+        <label class="field"><span>Follow-up e-mail sent on</span><input class="input" type="date" name="followup_mail" max="${today()}" /></label>
+      </div>
       <fieldset class="also-add"><legend>Add a contact person to all (optional)</legend>
         <div class="form-grid">
           <label class="field"><span>Name</span><input class="input" name="c_name" placeholder="e.g. Anna Jónsdóttir" /></label>
@@ -214,12 +217,15 @@ function bulkEdit(list, done) {
     const leaving = form.stage.value && form.stage.value !== 'new' && toVisit;
     m.el.querySelector('[data-visit-hint]').textContent = leaving
       ? `${toVisit} of them are “To visit” – each gets a visit logged on this date.`
-      : form.note.value.trim()
-        ? 'The note is saved as a meeting on this date.'
-        : '';
+      : !form.note.value.trim()
+        ? ''
+        : form.followup_mail.value
+          ? 'The note is saved with the follow-up e-mail.'
+          : 'The note is saved as a meeting on this date.';
   };
   form.stage.addEventListener('change', hint);
   form.note.addEventListener('input', hint);
+  form.followup_mail.addEventListener('input', hint);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(form);
@@ -230,10 +236,10 @@ function bulkEdit(list, done) {
     if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
     const contact = f.c_name.trim() ? { name: f.c_name, role: f.c_role, phone: f.c_phone, email: f.c_email } : null;
     if ((f.c_role || f.c_phone || f.c_email) && !contact) return toast('Add the contact person’s name', 'error');
-    if (!Object.keys(set).length && !f.note.trim() && !contact) return toast('Nothing to change', 'error');
-    if (f.day > today()) return toast('Pick a day up to today', 'error');
+    if (!Object.keys(set).length && !f.note.trim() && !contact && !f.followup_mail) return toast('Nothing to change', 'error');
+    if (f.day > today() || f.followup_mail > today()) return toast('Pick a day up to today', 'error');
     try {
-      const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note, contact } });
+      const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note, contact, followup_mail: f.followup_mail || null } });
       m.close();
       toast(`Updated ${updated} partners`);
       done();
