@@ -58,6 +58,7 @@ export const ACTIVITY_TYPES = [
   { value: 'meeting', label: 'Meeting' },
   { value: 'call', label: 'Call' },
   { value: 'email', label: 'E-mail' },
+  { value: 'followup', label: 'Follow-up e-mail' },
   { value: 'note', label: 'Note' },
 ];
 

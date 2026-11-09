@@ -70,7 +70,7 @@ export async function render(page, { params, refresh, isCurrent }) {
         }
         ${showAffiliate ? '<section class="card" id="perf"><div class="card-head"><h2>Partnership &amp; bookings</h2></div><p class="empty">Loading…</p></section>' : ''}
         <section class="card">
-          <div class="card-head"><h2>Activity <span class="muted">(${activities.length})</span></h2></div>
+          <div class="card-head"><h2>Activity <span class="muted">(${activities.length})</span></h2>${admin ? '<button class="link-btn" data-followup-mail>+ Follow-up e-mail</button>' : ''}</div>
           ${
             activities.length
               ? `<ol class="timeline">${activities
@@ -148,8 +148,7 @@ export async function render(page, { params, refresh, isCurrent }) {
   const setWelcome = async (date) => {
     try {
       if (date && !p.welcome_sent) {
-        const at = date === today() ? new Date() : new Date(`${date}T12:00`);
-        await api('/api/activities', { method: 'POST', body: { partner_id: p.id, type: 'email', happened_at: at.toISOString(), summary: 'Welcome e-mail sent' } });
+        await api('/api/activities', { method: 'POST', body: { partner_id: p.id, type: 'email', happened_at: dayToIso(date), summary: 'Welcome e-mail sent' } });
       }
       await patch({ welcome_sent: date }, date ? 'Welcome e-mail marked as sent' : 'Cleared');
     } catch (e) {
@@ -171,6 +170,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
     else if (d.welcome) setWelcome(d.welcome === 'clear' ? null : today());
+    else if ('followupMail' in d) followUpMail(p, refresh);
     else if ('log' in d) logActivity(p, contacts, refresh);
     else if ('planVisit' in d) planVisits(planned ?? shiftDate(today(), 1), refresh, [p.id]);
     else if (d.contact) contactForm(p, d.contact === 'new' ? { is_primary: contacts.length === 0 } : contacts.find((c) => c.id === d.contact), refresh);
@@ -254,13 +254,17 @@ async function renderPerformance(page, p, cur, isCurrent, refresh) {
 
 // Leaving "To visit" records a visit: ask which day it was, since it's often confirmed later.
 // Resolves with the date, or never if the window is closed.
-export function askVisitDate(p) {
+export const askVisitDate = (p) => askDay(`When did you visit ${p.name}?`, 'Date of the visit').then((r) => r.day);
+
+// A window asking for a day (up to today), optionally with a note. Resolves with { day, note }.
+function askDay(title, label, { note = false } = {}) {
   return new Promise((resolve) => {
     const m = openModal(
-      `When did you visit ${p.name}?`,
+      title,
       `<form>
         <div class="chips">${[0, 1, 2, 3].map((n) => `<button type="button" data-ago="${n}" aria-pressed="${n === 0}">${n === 0 ? 'Today' : n === 1 ? 'Yesterday' : shortDate(shiftDate(today(), -n))}</button>`).join('')}</div>
-        <label class="field"><span>Date of the visit</span><input class="input" type="date" name="day" value="${today()}" max="${today()}" required /></label>
+        <label class="field"><span>${esc(label)}</span><input class="input" type="date" name="day" value="${today()}" max="${today()}" required /></label>
+        ${note ? '<label class="field"><span>Note (optional)</span><textarea class="input" name="note" rows="2" placeholder="What you asked or offered…"></textarea></label>' : ''}
         <button class="btn block" type="submit">Save</button>
       </form>`
     );
@@ -277,9 +281,24 @@ export function askVisitDate(p) {
       e.preventDefault();
       if (!form.day.value || form.day.value > today()) return toast('Pick a day up to today', 'error');
       m.close();
-      resolve(form.day.value);
+      resolve({ day: form.day.value, note: form.note?.value.trim() ?? '' });
     });
   });
+}
+
+// Today means now; an earlier day has no real time, so midday keeps it on that date.
+const dayToIso = (day) => (day === today() ? new Date() : new Date(`${day}T12:00`)).toISOString();
+
+// A follow-up e-mail goes into the activity history; it can be sent many times, so it isn't one date on the partner.
+async function followUpMail(p, refresh) {
+  const { day, note } = await askDay(`Follow-up e-mail to ${p.name}`, 'Sent on', { note: true });
+  try {
+    await api('/api/activities', { method: 'POST', body: { partner_id: p.id, type: 'followup', happened_at: dayToIso(day), summary: note } });
+    toast('Follow-up e-mail logged');
+    refresh();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // Correct when a logged visit / call / e-mail happened.

@@ -7,7 +7,7 @@
 import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
 import { savePartner } from '../_lib/partners.js';
 
-const TYPES = ['visit', 'meeting', 'call', 'email', 'note'];
+const TYPES = ['visit', 'meeting', 'call', 'email', 'followup', 'note'];
 
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true, section: 'sales' });
