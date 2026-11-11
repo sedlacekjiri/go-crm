@@ -562,7 +562,7 @@ a.pill { text-decoration: none; }
   .cal.month .day { min-height: 44px; }
   .task { flex-wrap: wrap; }
   .task .acts { width: 100%; padding-left: 36px; }
-  .task .acts .icon-btn { margin-left: auto; }
+  .task .acts .icon-btn:first-of-type { margin-left: auto; }
   .cal-head .controls { width: auto; }
 }
 

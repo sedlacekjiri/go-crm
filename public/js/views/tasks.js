@@ -5,9 +5,9 @@ import { agenda, AREAS, eventTimeText, laterItems, daysLeft, subtaskProgress, da
 import { commentChip, commentsHtml, mountComments } from '../comments.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
-import { eventModal } from '../events.js';
+import { eventModal, googleCalendarUrl } from '../events.js';
 import { api, assigneeId, can, isAdmin, state, taskPerson, userById } from '../store.js';
-import { esc, formData, monthLabel, openModal, options, shortDate, storage, toast } from '../util.js';
+import { copyText, dateTime, esc, formData, monthLabel, openModal, options, shortDate, storage, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
 import { handleNoteClick, pinnedStrip, renderBoard } from './notes.js';
@@ -100,6 +100,7 @@ export function render(page, ctx) {
       ${
         admin
           ? `<div class="acts">${v.done ? '<span class="pill good">Visited</span>' : `<button class="btn sm" data-log="${p.id}">Log visit</button>`}
+             ${v.done ? '' : `<a class="icon-btn round sm" href="${esc(visitGoogleUrl(v))}" target="_blank" rel="noopener" title="Add this visit to Google Calendar" aria-label="Add to Google Calendar">📅</a>`}
              <button class="icon-btn round sm" data-menu-task="${v.id}" aria-label="More">⋯</button></div>`
           : ''
       }
@@ -295,14 +296,17 @@ export function render(page, ctx) {
           <button class="icon-btn" data-shift="1" aria-label="Next">→</button>
           ${selected !== t ? '<button class="btn secondary sm" data-go-today>Today</button>' : ''}
         </div>
-        ${seg('mode', mode, [
-          { value: 'week', label: 'Week' },
-          { value: 'month', label: 'Month' },
-        ])}
+        <div class="controls">
+          ${can('sales') && state.me?.id !== 'viewer' ? '<button class="btn secondary sm" data-gcal title="Show the Sales calendar in your Google Calendar">📅 Google Calendar</button>' : ''}
+          ${seg('mode', mode, [
+            { value: 'week', label: 'Week' },
+            { value: 'month', label: 'Month' },
+          ])}
+        </div>
       </div>
       ${mode === 'month' ? `<div class="cal-dows">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => `<span>${d}</span>`).join('')}</div>` : ''}
       <div class="cal ${mode}">${days.map(cell).join('')}</div>
-      <div class="cal-legend"><span><i class="e"></i>Event</span><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do</span><span><i class="f"></i>Follow-up</span><span><i class="p"></i>Post</span></div>
+      <div class="cal-legend"><span><i class="e"></i>Event</span><span><i class="v"></i>Visit</span><span><i class="t"></i>To-do</span><span><i class="f"></i>Follow-up</span>${category === 'sales' ? '' : '<span><i class="p"></i>Post</span>'}</div>
     </section>
     <section class="tl-section">
       <header class="tl-head"><h2>${esc(dayTitle(selected))}</h2>${admin && can('sales') ? '<button class="link-btn" data-plan>+ Plan visits</button>' : ''}</header>
@@ -336,6 +340,7 @@ export function render(page, ctx) {
     page.querySelector(`[data-sub-add="${refocus}"] input`)?.focus();
     refocus = null;
   }
+  page.querySelector('[data-gcal]')?.addEventListener('click', googleCalendarFeed);
   onSeg(page, 'mode', (m) => {
     mode = m;
     rerender();
@@ -450,6 +455,66 @@ function wireDateChips(m, input) {
     })
   );
   input.addEventListener('change', () => m.el.querySelectorAll('[data-date]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.date === input.value))));
+}
+
+// One planned visit as a Google Calendar event (opens Google with it filled in).
+const visitGoogleUrl = (v) =>
+  googleCalendarUrl({
+    title: `Visit: ${v.partner.name}`,
+    date: v.due_date,
+    start_time: v.due_time,
+    location: [v.partner.name, v.partner.address].filter(Boolean).join(', '),
+    notes: [v.notes, `${location.origin}/#/partner/${v.partner.id}`].filter(Boolean).join('\n\n'),
+  });
+
+// The whole Sales calendar in Google Calendar: a private feed link that Google subscribes to.
+async function googleCalendarFeed() {
+  let status;
+  try {
+    status = await api('/api/calendar');
+  } catch (err) {
+    return toast(err.message, 'error');
+  }
+  const m = openModal('Sales calendar in Google Calendar', '<div data-body></div>');
+  const body = m.el.querySelector('[data-body]');
+  const show = (url) => {
+    // Google's "add calendar" page takes the feed as a webcal:// link.
+    const subscribe = url && `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(url.replace(/^https?:/, 'webcal:'))}`;
+    body.innerHTML = url
+      ? `<p class="muted small" style="margin:0 0 12px">Your planned visits (with times), follow-ups, sales to-dos and sales events – they update by themselves.</p>
+        <a class="btn block" href="${esc(subscribe)}" target="_blank" rel="noopener">Add to Google Calendar</a>
+        <label class="field" style="margin-top:14px"><span>Or copy your private link</span>
+          <div class="follow-row"><input class="input" style="flex:1;min-width:0" readonly value="${esc(url)}" data-url /><button type="button" class="btn secondary" data-copy>Copy</button></div>
+          <small>In Google Calendar: Other calendars <b>+</b> → From URL → paste. Works in iPhone / Outlook too.</small></label>
+        <p class="muted small">Google refreshes it every few hours, so a change can take a while to show up there. Keep the link to yourself – anyone with it can see the calendar.</p>
+        <button type="button" class="link-btn" data-off>Turn the link off</button>`
+      : status.active
+        ? `<p style="margin:0 0 12px">You already have a private link (made ${esc(dateTime(status.created_at))}). For safety it’s shown only once.</p>
+          <p class="muted small">Lost it, or need it on another device? A new link replaces it – the old one stops working, so re-add it in Google.</p>
+          <button type="button" class="btn block" data-new>Make a new link</button>
+          <button type="button" class="link-btn" style="margin-top:10px" data-off>Turn the link off</button>`
+        : `<p style="margin:0 0 12px">See your planned visits (with times), follow-ups, sales to-dos and sales events in Google Calendar on your phone – kept up to date automatically.</p>
+          <button type="button" class="btn block" data-new>Create my private link</button>`;
+  };
+  show(null);
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    try {
+      if ('new' in b.dataset) {
+        const { url } = await api('/api/calendar', { method: 'POST' });
+        status.active = true;
+        show(url);
+      } else if ('copy' in b.dataset) copyText(body.querySelector('[data-url]').value);
+      else if ('off' in b.dataset && confirm('Turn the link off? Google Calendar will stop getting updates.')) {
+        await api('/api/calendar', { method: 'DELETE' });
+        toast('Link turned off');
+        m.close();
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
 }
 
 // Pick partners for a day. "To visit" first, grouped by area so the list reads like a walking route.
