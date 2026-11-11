@@ -7,7 +7,7 @@ import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
 import { eventModal } from '../events.js';
 import { api, assigneeId, can, isAdmin, state, taskPerson, userById } from '../store.js';
-import { esc, formData, monthLabel, openModal, options, shortDate, toast } from '../util.js';
+import { esc, formData, monthLabel, openModal, options, shortDate, storage, toast } from '../util.js';
 import { postModal } from './marketing.js';
 import { renderDone } from './done.js';
 import { handleNoteClick, pinnedStrip, renderBoard } from './notes.js';
@@ -16,7 +16,17 @@ import { logActivity } from './partner.js';
 // View state survives navigation.
 let selected = null;
 let mode = 'week';
-let category = ''; // '' | 'sales' | 'marketing'
+// '' | 'sales' | 'marketing' – remembered on this device, so e.g. the calendar stays on Sales.
+let category = storage.get('go-crm-task-cat', '');
+const setCategory = (c) => {
+  category = c;
+  storage.set('go-crm-task-cat', c || null);
+};
+// The menu's “Calendar” (Sales) item is lit on the calendar while it shows Sales, else “Tasks”.
+function markNav(tab) {
+  const key = tab === 'calendar' && category === 'sales' ? 'calendar' : 'tasks';
+  document.querySelectorAll('[data-nav="tasks"], [data-nav="calendar"]').forEach((a) => a.classList.toggle('active', a.dataset.nav === key));
+}
 let who = ''; // '' everyone | 'me' | 'none' (unassigned) | a user id
 
 // Filter by who the task is assigned to (visits are always the owner's).
@@ -39,6 +49,14 @@ const dayTitle = (d) => {
 };
 
 export function render(page, ctx) {
+  // The menu's Calendar opens with ?cat=sales: apply it once, then drop it from the address,
+  // so picking another filter later isn't undone by a refresh.
+  if (ctx.query.has('cat')) {
+    setCategory(['sales', 'marketing'].includes(ctx.query.get('cat')) ? ctx.query.get('cat') : '');
+    ctx.query.delete('cat');
+    history.replaceState(null, '', `#/tasks${ctx.query.size ? `?${ctx.query}` : ''}`);
+  }
+  if (category && !can(category)) setCategory('');
   const t = today();
   selected ??= t;
   const admin = isAdmin();
@@ -150,6 +168,7 @@ export function render(page, ctx) {
     </li>`;
 
   const tab = ['notes', 'done', 'calendar'].includes(ctx.query.get('tab')) ? ctx.query.get('tab') : 'list';
+  markNav(tab);
   // Filters are always visible, and you're told when they hide something overdue.
   const filtered = !!category || !!who;
   const allLate = overdue(t, { ...state, events: state.events ?? [] }, '');
@@ -201,11 +220,11 @@ export function render(page, ctx) {
         who = b.dataset.who;
         render(page, ctx);
       } else if (b?.dataset.cat !== undefined) {
-        category = b.dataset.cat;
+        setCategory(b.dataset.cat);
         render(page, ctx);
       } else if (b && 'clearFilters' in b.dataset) {
         who = '';
-        category = '';
+        setCategory('');
         render(page, ctx);
       } else if (b && 'plan' in b.dataset) planVisits(selected, ctx.refresh);
       else if (b && 'newTask' in b.dataset) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: selected, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
@@ -345,11 +364,11 @@ export function render(page, ctx) {
       who = d.who;
       rerender();
     } else if (d.cat !== undefined) {
-      category = d.cat;
+      setCategory(d.cat);
       rerender();
     } else if ('clearFilters' in d) {
       who = '';
-      category = '';
+      setCategory('');
       rerender();
     } else if (d.newTaskOn) taskModal({ type: 'todo', category: category || defaultCategory(), due_date: d.newTaskOn, assignee_id: who && who !== 'me' && who !== 'none' ? who : null }, ctx.refresh);
     else if (d.post) postModal(state.posts.find((x) => x.id === d.post), ctx.refresh);
