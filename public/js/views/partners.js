@@ -202,6 +202,7 @@ function bulkEdit(list, done) {
       <div class="form-grid">
         <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
         <label class="field"><span>Follow-up e-mail sent on</span><input class="input" type="date" name="followup_mail" max="${today()}" /></label>
+        <label class="field"><span>Replied to welcome e-mail on</span><input class="input" type="date" name="welcome_reply" max="${today()}" /></label>
       </div>
       <fieldset class="also-add"><legend>Add a contact person to all (optional)</legend>
         <div class="form-grid">
@@ -240,11 +241,12 @@ function bulkEdit(list, done) {
     if (f.interest) set.interest = Number(f.interest);
     if (f.next_follow_up) set.next_follow_up = f.next_follow_up;
     if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
+    if (f.welcome_reply) set.welcome_reply = f.welcome_reply;
     if (['on_hold', 'declined'].includes(f.stage) && f.declined_reason.trim()) set.declined_reason = f.declined_reason;
     const contact = f.c_name.trim() ? { name: f.c_name, role: f.c_role, phone: f.c_phone, email: f.c_email } : null;
     if ((f.c_role || f.c_phone || f.c_email) && !contact) return toast('Add the contact person’s name', 'error');
     if (!Object.keys(set).length && !f.note.trim() && !contact && !f.followup_mail) return toast('Nothing to change', 'error');
-    if (f.day > today() || f.followup_mail > today()) return toast('Pick a day up to today', 'error');
+    if (f.day > today() || f.followup_mail > today() || f.welcome_reply > today()) return toast('Pick a day up to today', 'error');
     try {
       const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note, contact, followup_mail: f.followup_mail || null } });
       m.close();

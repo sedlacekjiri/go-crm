@@ -185,7 +185,8 @@ describe('goals', () => {
   it('counts actuals for a month', () => {
     const partners = [
       { id: 'a', stage: 'accepted', accepted_at: '2026-10-03', affiliate_code: 'BORG' },
-      { id: 'b', stage: 'accepted', accepted_at: '2026-09-20', affiliate_code: null },
+      { id: 'b', stage: 'accepted', accepted_at: '2026-09-20', affiliate_code: null, welcome_sent: '2026-10-01' },
+      { id: 'c', stage: 'contacted', welcome_sent: '2026-09-30', welcome_reply: '2026-10-04' },
     ];
     const activities = [
       { partner_id: 'a', type: 'visit', happened_at: '2026-10-05T12:00:00.000Z' },
@@ -199,7 +200,7 @@ describe('goals', () => {
       { booking_date: '2026-10-02', affiliate_code: 'borg', amount_eur: 500, is_cancelled: true },
       { booking_date: '2026-10-02', affiliate_code: null, amount_eur: 900, is_cancelled: false },
     ];
-    assert.deepEqual(actuals('2026-10', { partners, activities, sales }), { visits: 3, hotels_visited: 1, new_partners: 1, bookings: 1, revenue_eur: 500 });
+    assert.deepEqual(actuals('2026-10', { partners, activities, sales }), { visits: 3, hotels_visited: 1, welcome_emails: 1, welcome_replies: 1, new_partners: 1, bookings: 1, revenue_eur: 500 });
   });
 });
 
@@ -476,7 +477,7 @@ describe('mapsUrls', () => {
 
 describe('Home: welcome e-mails and next follow-ups', () => {
   const partners = [
-    { id: 'a', name: 'Borg', stage: 'contacted', welcome_sent: '2026-11-10', next_follow_up: '2026-11-20' },
+    { id: 'a', name: 'Borg', stage: 'contacted', welcome_sent: '2026-11-10', welcome_reply: '2026-11-11', next_follow_up: '2026-11-20' },
     { id: 'b', name: 'Kex', stage: 'accepted', welcome_sent: '2026-10-02', next_follow_up: '2026-11-01' },
     { id: 'c', name: 'Plaza', stage: 'on_hold', next_follow_up: '2027-01-05' },
     { id: 'd', name: 'Arnarhvoll', stage: 'in_talks', next_follow_up: '2026-11-05' },
@@ -485,7 +486,7 @@ describe('Home: welcome e-mails and next follow-ups', () => {
   ];
   it('counts welcome e-mails sent and visited places still without one', async () => {
     const { welcomeStats } = await import('../public/js/lib.js');
-    assert.deepEqual(welcomeStats(partners, '2026-11-11'), { total: 2, month: 1, week: 1, toSend: 2 });
+    assert.deepEqual(welcomeStats(partners, '2026-11-11'), { total: 2, month: 1, week: 1, replies: 1, toSend: 2 });
   });
   it('lists open follow-ups soonest first, including on hold, without partners or declined', async () => {
     const { nextFollowUps } = await import('../public/js/lib.js');

@@ -74,7 +74,7 @@ export async function render(page, { refresh, isCurrent }) {
           )
           .join('')}</tbody>
       </table></div>
-      <p class="muted small" style="margin-top:10px">Visits = visits + meetings logged. New partners = moved to Partner that month. Bookings &amp; revenue = bookings whose affiliate code belongs to a CRM partner, by booking date.</p>
+      <p class="muted small" style="margin-top:10px">Visits = visits + meetings logged. Welcome e-mails and replies = by the dates set on the partner. New partners = moved to Partner that month. Bookings &amp; revenue = bookings whose affiliate code belongs to a CRM partner, by booking date.</p>
     </section>`;
 
   page.querySelectorAll('[data-month]').forEach((b) =>

@@ -22,6 +22,7 @@ const FIELDS = {
   affiliate_url: (v) => str(v, 500),
   next_follow_up: (v) => (isDate(v) ? v : null),
   welcome_sent: (v) => (isDate(v) ? v : null),
+  welcome_reply: (v) => (isDate(v) ? v : null),
   declined_reason: (v) => str(v, 500),
   notes: (v) => str(v, 5000),
 };

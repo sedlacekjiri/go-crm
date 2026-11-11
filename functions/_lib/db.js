@@ -517,6 +517,7 @@ const MIGRATIONS = [
   `ALTER TABLE posts ADD COLUMN assignee_id TEXT`, // who makes the post
   `ALTER TABLE tasks ADD COLUMN followers TEXT`, // JSON ids: people @mentioned in its comments see the task
   `ALTER TABLE partners ADD COLUMN welcome_sent TEXT`, // date the welcome / intro e-mail went out
+  `ALTER TABLE partners ADD COLUMN welcome_reply TEXT`, // date they replied to it
 ];
 
 let schemaReady = false;

@@ -64,6 +64,14 @@ export async function render(page, { params, refresh, isCurrent }) {
               <div class="chips">${p.welcome_sent ? '' : '<button type="button" data-welcome="today">Sent today</button>'}
                 <input class="input welcome-date" type="date" max="${today()}" value="${p.welcome_sent ?? ''}" data-welcome-date aria-label="Date the welcome e-mail was sent" />
                 ${p.welcome_sent ? '<button type="button" data-welcome="clear">Clear</button>' : ''}</div></div>
+            ${
+              p.welcome_sent
+                ? `<div class="line"><span class="lbl">Reply</span>${p.welcome_reply ? `<span class="pill good">✓ Replied ${shortDate(p.welcome_reply)}</span>` : '<span class="pill">No reply yet</span>'}
+              <div class="chips">${p.welcome_reply ? '' : '<button type="button" data-reply="today">Replied today</button>'}
+                <input class="input welcome-date" type="date" min="${p.welcome_sent}" max="${today()}" value="${p.welcome_reply ?? ''}" data-reply-date aria-label="Date they replied to the welcome e-mail" />
+                ${p.welcome_reply ? '<button type="button" data-reply="clear">Clear</button>' : ''}</div></div>`
+                : ''
+            }
             ${['declined', 'on_hold'].includes(p.stage) && p.declined_reason ? `<p class="muted" style="margin-top:12px">${p.stage === 'on_hold' ? 'On hold' : 'Declined'}: ${esc(p.declined_reason)}</p>` : ''}
           </section>`
             : ''
@@ -156,6 +164,18 @@ export async function render(page, { params, refresh, isCurrent }) {
     }
   };
   page.querySelector('[data-welcome-date]')?.addEventListener('change', (e) => setWelcome(e.target.value || null));
+  // Same for their reply to it.
+  const setReply = async (date) => {
+    try {
+      if (date && !p.welcome_reply) {
+        await api('/api/activities', { method: 'POST', body: { partner_id: p.id, type: 'email', happened_at: dayToIso(date), summary: 'Replied to the welcome e-mail' } });
+      }
+      await patch({ welcome_reply: date }, date ? 'Reply marked' : 'Cleared');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  page.querySelector('[data-reply-date]')?.addEventListener('change', (e) => setReply(e.target.value || null));
 
   page.onclick = async (e) => {
     const el = e.target.closest('button');
@@ -170,6 +190,7 @@ export async function render(page, { params, refresh, isCurrent }) {
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
     else if (d.welcome) setWelcome(d.welcome === 'clear' ? null : today());
+    else if (d.reply) setReply(d.reply === 'clear' ? null : today());
     else if ('followupMail' in d) followUpMail(p, refresh);
     else if ('log' in d) logActivity(p, contacts, refresh);
     else if ('planVisit' in d) planVisits(planned ?? shiftDate(today(), 1), refresh, [p.id]);

@@ -162,13 +162,13 @@ export async function render(page, { isCurrent }) {
         <div class="mini-kpis two">
           ${miniKpi('Sent in total', num(welcome.total))}
           ${miniKpi(monthLabel(month).split(' ')[0], num(welcome.month))}
-          ${miniKpi('Last 7 days', num(welcome.week))}
+          ${miniKpi('Replies', num(welcome.replies), welcome.total ? `${pct(welcome.replies, welcome.total)} of sent` : '')}
           ${miniKpi('Visited, not sent yet', num(welcome.toSend))}
         </div>
         ${
           lastWelcome.length
             ? `<div class="list" style="margin-top:10px">${lastWelcome
-                .map((p) => `<a class="row" href="#/partner/${p.id}"><span class="name">${esc(p.name)}</span><span class="val muted small">${shortDate(p.welcome_sent)}</span></a>`)
+                .map((p) => `<a class="row" href="#/partner/${p.id}"><span class="name">${esc(p.name)}</span><span class="row-end">${p.welcome_reply ? '<span class="pill good">Replied</span>' : ''}<span class="muted small">${shortDate(p.welcome_sent)}</span></span></a>`)
                 .join('')}</div>`
             : ''
         }

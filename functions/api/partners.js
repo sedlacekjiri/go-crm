@@ -1,7 +1,7 @@
 // /api/partners (admin only)
 //   POST   { id?, ...fields }            create, or update only the fields that are sent
 //   POST   { bulk: [names], type, area, chain } add many partners at once (existing names are skipped)
-//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent, declined_reason }, visited_on, note, contact, followup_mail }
+//   POST   { ids: [...], set: { stage, interest, next_follow_up, welcome_sent, welcome_reply, declined_reason }, visited_on, note, contact, followup_mail }
 //          change several partners at once (e.g. one meeting about a whole hotel chain)
 //   DELETE ?id=…                          delete a partner with its contacts and activity log
 
@@ -9,7 +9,7 @@ import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '.
 import { savePartner, TYPES } from '../_lib/partners.js';
 import { addContactTo } from '../_lib/contacts.js';
 
-const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent', 'declined_reason'];
+const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent', 'welcome_reply', 'declined_reason'];
 
 async function bulkUpdate(env, body) {
   const ids = [...new Set(body.ids.map((id) => str(id, 64)).filter(Boolean))].slice(0, 500);
@@ -46,6 +46,12 @@ async function bulkUpdate(env, body) {
     if (isDate(set.welcome_sent) && !p.welcome_sent) {
       const at = set.welcome_sent === now().slice(0, 10) ? now() : `${set.welcome_sent}T12:00:00.000Z`;
       await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'email', ?, 'Welcome e-mail sent', ?)`)
+        .bind(uuid(), p.id, at, now())
+        .run();
+    }
+    if (isDate(set.welcome_reply) && !p.welcome_reply) {
+      const at = set.welcome_reply === now().slice(0, 10) ? now() : `${set.welcome_reply}T12:00:00.000Z`;
+      await env.DB.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'email', ?, 'Replied to the welcome e-mail', ?)`)
         .bind(uuid(), p.id, at, now())
         .run();
     }

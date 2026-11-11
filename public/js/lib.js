@@ -147,14 +147,15 @@ export const CHECKLIST_TEMPLATES = {
   story: ['Content', 'Stickers / link', 'Post'],
 };
 
-// Welcome e-mails: how many went out (all time, this month, last 7 days) and how many visited
-// places still wait for one (To visit and Declined don't need one yet).
+// Welcome e-mails: how many went out (all time, this month, last 7 days), how many got a reply,
+// and how many visited places still wait for one (To visit and Declined don't need one yet).
 export function welcomeStats(partners, t = today()) {
   const sent = partners.filter((p) => p.welcome_sent).map((p) => p.welcome_sent);
   return {
     total: sent.length,
     month: sent.filter((d) => monthOf(d) === monthOf(t)).length,
     week: sent.filter((d) => d > shiftDate(t, -7) && d <= t).length,
+    replies: partners.filter((p) => p.welcome_sent && p.welcome_reply).length,
     toSend: partners.filter((p) => !p.welcome_sent && !['new', 'declined'].includes(p.stage)).length,
   };
 }
@@ -201,6 +202,8 @@ export function reviewGrowth(snapshots) {
 export const GOAL_METRICS = [
   { value: 'visits', label: 'Visits & meetings', unit: '' },
   { value: 'hotels_visited', label: 'Hotels visited (first time)', unit: '' },
+  { value: 'welcome_emails', label: 'Welcome e-mails sent', unit: '' },
+  { value: 'welcome_replies', label: 'Replies to welcome e-mails', unit: '' },
   { value: 'new_partners', label: 'New partners', unit: '' },
   { value: 'bookings', label: 'Partner bookings', unit: '' },
   { value: 'revenue_eur', label: 'Partner revenue', unit: 'EUR' },
@@ -624,6 +627,8 @@ export function actuals(month, { activities, partners, sales, affiliates = [] })
   return {
     visits: activities.filter((a) => (a.type === 'visit' || a.type === 'meeting') && localMonth(a.happened_at) === month).length,
     hotels_visited: [...firstVisit.values()].filter((ts) => localMonth(ts) === month).length,
+    welcome_emails: partners.filter((p) => p.welcome_sent && monthOf(p.welcome_sent) === month).length,
+    welcome_replies: partners.filter((p) => p.welcome_reply && monthOf(p.welcome_reply) === month).length,
     new_partners: partners.filter((p) => p.stage === 'accepted' && p.accepted_at && monthOf(p.accepted_at) === month).length,
     bookings: partnerSales.length,
     revenue_eur: partnerSales.reduce((sum, s) => sum + Number(s.amount_eur), 0),
