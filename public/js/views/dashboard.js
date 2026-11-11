@@ -158,7 +158,7 @@ export async function render(page, { isCurrent }) {
         }
       </section>
       <section class="card">
-        <div class="card-head"><h2>Welcome e-mails</h2><a class="link-btn" href="#/partners?type=hotel&welcome=not_sent">Not sent →</a></div>
+        <div class="card-head"><h2>Welcome e-mails</h2><a class="link-btn" href="#/partners?type=all&welcome=not_sent">Not sent →</a></div>
         <div class="mini-kpis two">
           ${miniKpi('Sent in total', num(welcome.total))}
           ${miniKpi(monthLabel(month).split(' ')[0], num(welcome.month))}

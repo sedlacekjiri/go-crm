@@ -1,6 +1,6 @@
-// Partner list with type tabs, search, area / stage filters and bulk add.
+// Partner list with type tabs (or all types at once), search, area / stage filters and bulk add.
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
-import { AREAS, capacityText, chainCounts, chainSuggestions, INTEREST, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
+import { AREAS, capacityText, chainCounts, chainSuggestions, INTEREST, PARTNER_TYPES, STAGES, today, typeLabel, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { renderOverview } from './affiliates.js';
 import { esc, formData, openModal, options, shortDate, toast } from '../util.js';
@@ -15,18 +15,20 @@ export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
   // Home links straight to e.g. “no welcome e-mail yet”.
   if (query.has('welcome')) filters.welcome = query.get('welcome');
+  const all = query.get('type') === 'all';
   const type = PARTNER_TYPES.some((t) => t.value === query.get('type')) ? query.get('type') : 'hotel';
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
+  const ofType = (p) => all || p.type === type;
   // A chain filter from another tab doesn't apply here (and its select may not even be shown).
-  const typeChains = new Set(state.partners.filter((x) => x.type === type && x.chain).map((x) => x.chain));
+  const typeChains = new Set(state.partners.filter((x) => ofType(x) && x.chain).map((x) => x.chain));
   if (filters.chain && (!typeChains.size || (filters.chain !== '__none' && !typeChains.has(filters.chain)))) filters.chain = '';
   const lastContact = new Map();
   for (const a of state.activities) if (!lastContact.has(a.partner_id)) lastContact.set(a.partner_id, a.happened_at);
   const visits = visitStats(state.activities);
   const count = (pred) => state.partners.filter(pred).length;
 
-  const tabs = `<nav class="tabs">${PARTNER_TYPES.map(
-      (t) => `<a href="#/partners?type=${t.value}" class="${t.value === type && !isAffiliates ? 'active' : ''}">${t.label}<span class="count">${count((p) => p.type === t.value)}</span></a>`
+  const tabs = `<nav class="tabs"><a href="#/partners?type=all" class="${all ? 'active' : ''}">All<span class="count">${state.partners.length}</span></a>${PARTNER_TYPES.map(
+      (t) => `<a href="#/partners?type=${t.value}" class="${t.value === type && !all && !isAffiliates ? 'active' : ''}">${t.label}<span class="count">${count((p) => p.type === t.value)}</span></a>`
     ).join('')}<a href="#/partners?type=affiliates" class="${isAffiliates ? 'active' : ''}">Staff codes<span class="count">${state.affiliates.length}</span></a></nav>`;
 
   if (isAffiliates) {
@@ -38,16 +40,16 @@ export function render(page, { query, refresh, isCurrent }) {
     ${pageHeader(
       'Partners',
       'Hotels, guesthouses, hostels, campsites, OTAs and cafés',
-      isAdmin() ? `<button class="btn secondary" data-select-mode>${selecting ? 'Done selecting' : 'Select'}</button><button class="btn secondary" data-bulk>Add many at once</button><a class="btn" href="#/partners/new?type=${type}">+ Add ${esc(typeInfo.singular.toLowerCase())}</a>` : ''
+      isAdmin() ? `<button class="btn secondary" data-select-mode>${selecting ? 'Done selecting' : 'Select'}</button><button class="btn secondary" data-bulk>Add many at once</button><a class="btn" href="#/partners/new${all ? '' : `?type=${type}`}">+ Add ${all ? 'partner' : esc(typeInfo.singular.toLowerCase())}</a>` : ''
     )}
     ${tabs}
     <div class="toolbar">
       <input class="input grow" type="search" placeholder="Search name, chain, address, code…" value="${esc(filters.query)}" data-f="query" />
       <select class="input" data-f="area" aria-label="Area">${options(AREAS, filters.area, { empty: 'All areas' })}</select>
       ${(() => {
-        const chains = chainCounts(state.partners.filter((x) => x.type === type));
+        const chains = chainCounts(state.partners.filter(ofType));
         if (!chains.length) return '';
-        const independent = state.partners.filter((x) => x.type === type && !x.chain).length;
+        const independent = state.partners.filter((x) => ofType(x) && !x.chain).length;
         return `<select class="input" data-f="chain" aria-label="Chain">${options(
           [{ value: '__none', label: `Independent (${independent})` }, ...chains.map((c) => ({ value: c.chain, label: `${c.chain} (${c.n})` }))],
           filters.chain,
@@ -76,7 +78,7 @@ export function render(page, { query, refresh, isCurrent }) {
       .map(
         (s) =>
           `<button type="button" data-stage="${s.value}" aria-pressed="${filters.stage === s.value}">${s.label}${
-            s.value ? `<span class="count">${count((p) => p.type === type && p.stage === s.value)}</span>` : ''
+            s.value ? `<span class="count">${count((p) => ofType(p) && p.stage === s.value)}</span>` : ''
           }</button>`
       )
       .join('')}</div>
@@ -87,7 +89,7 @@ export function render(page, { query, refresh, isCurrent }) {
     const q = filters.query.trim().toLowerCase();
     const rows = state.partners.filter(
       (p) =>
-        p.type === type &&
+        ofType(p) &&
         (!filters.stage || p.stage === filters.stage) &&
         (!filters.area || p.area === filters.area) &&
         (!filters.chain || (filters.chain === '__none' ? !p.chain : p.chain === filters.chain)) &&
@@ -115,7 +117,7 @@ export function render(page, { query, refresh, isCurrent }) {
       ? `<div class="plist">${rows
           .map((p) => {
             const v = visits.get(p.id);
-            const meta = [p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
+            const meta = [all ? typeLabel(p.type) : null, p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
             return `<a class="prow${selecting ? ' selecting' : ''}${selected.has(p.id) ? ' on' : ''}" href="#/partner/${p.id}" data-pid="${p.id}">
               ${selecting ? '<span class="pick" aria-hidden="true"></span>' : ''}<div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
               <div class="tags">${p.welcome_sent ? `<span class="pill good" title="Welcome e-mail sent ${shortDate(p.welcome_sent)}">✉️ ${shortDate(p.welcome_sent)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${
@@ -123,7 +125,7 @@ export function render(page, { query, refresh, isCurrent }) {
               }</div></a>`;
           })
           .join('')}</div>`
-      : emptyBox(`No ${typeInfo.label.toLowerCase()} here yet`, isAdmin() ? 'Add one, or use Bulk add to paste a whole list of names.' : '');
+      : emptyBox(`No ${all ? 'partners' : typeInfo.label.toLowerCase()} here yet`, isAdmin() ? 'Add one, or use Bulk add to paste a whole list of names.' : '');
   };
   let shown = [];
   drawList();
