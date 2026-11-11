@@ -51,7 +51,7 @@ export async function render(page, { isCurrent }) {
   const lateCount = late.tasks.length + late.followUps.length;
   const todayItems = [
     ...day.events.map((x) => ({ title: x.title, sub: ['Event', eventTimeText(x, t), x.location].filter(Boolean).join(' · '), href: '#/tasks', done: false, pill: '<span class="pill">📅 Event</span>' })),
-    ...day.visits.map((v) => ({ title: v.partner.name, sub: `Visit · ${v.partner.area ?? ''}`, href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
+    ...day.visits.map((v) => ({ title: v.partner.name, sub: ['Visit', v.due_time, v.partner.area].filter(Boolean).join(' · '), href: `#/partner/${v.partner.id}`, done: v.done, pill: v.done ? '<span class="pill good">Visited</span>' : '<span class="pill">Visit</span>' })),
     ...day.followUps.map((p) => ({ title: p.name, sub: `Follow-up · ${STAGES.find((s) => s.value === p.stage)?.label}`, href: `#/partner/${p.id}`, done: false, pill: followUpPill(p.next_follow_up) })),
     ...day.posts.map((x) => ({ title: x.title, sub: ['Post', x.publish_time, x.channels.map((c) => c[0].toUpperCase() + c.slice(1)).join(', ')].filter(Boolean).join(' · '), href: '#/marketing', done: x.status === 'published', pill: x.status === 'published' ? '<span class="pill good">Published</span>' : '<span class="pill">Post</span>', who: x })),
     ...day.ongoing.map((x) => ({ title: x.title, sub: `In progress · deadline ${shortDate(x.due_date)}`, href: '#/tasks', done: false, pill: '', who: x })),

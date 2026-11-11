@@ -77,7 +77,7 @@ export function render(page, ctx) {
       <span class="tick ${v.done ? 'on' : ''}" aria-hidden="true">${v.done ? '✓' : ''}</span>
       <div class="body">
         <a class="title" href="#/partner/${p.id}">${esc(p.name)}</a>
-        <div class="meta">${esc(p.area ?? 'No area')} · ${stageBadge(p.stage)}${st ? ` · ${st.count}× visited` : ''}</div>
+        <div class="meta">${v.due_time ? `<b>🕑 ${esc(v.due_time)}</b> · ` : ''}${esc(p.area ?? 'No area')} · ${stageBadge(p.stage)}${st ? ` · ${st.count}× visited` : ''}</div>
       </div>
       ${
         admin
@@ -225,7 +225,7 @@ export function render(page, ctx) {
   ];
   const visitGroup = (a) =>
     a.visits.length
-      ? `<div class="visit-group"><div class="vg-head">🏨 Hotel visits <span class="muted">· ${a.visits.filter((v) => v.done).length}/${a.visits.length} done · by area</span></div><ul class="tasks">${a.visits.map(visitRow).join('')}</ul></div>`
+      ? `<div class="visit-group"><div class="vg-head">🏨 Hotel visits <span class="muted">· ${a.visits.filter((v) => v.done).length}/${a.visits.length} done · ${a.visits.some((v) => v.due_time) ? 'by time, then area' : 'by area'}</span></div><ul class="tasks">${a.visits.map(visitRow).join('')}</ul></div>`
       : '';
   const dayName = (d) => (d === t ? 'Today' : d === shiftDate(t, 1) ? 'Tomorrow' : new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }));
   const daySection = (d) => {
@@ -441,7 +441,10 @@ export function planVisits(date, refresh, preselect = []) {
   const m = openModal(
     'Plan visits',
     `<form>
-      <label class="field"><span>Day</span><input class="input" type="date" name="date" value="${esc(date)}" required /></label>
+      <div class="form-grid">
+        <label class="field"><span>Day</span><input class="input" type="date" name="date" value="${esc(date)}" required /></label>
+        <label class="field"><span>Time (optional)</span><input class="input" type="time" name="time" /><small>Same for all chosen – change one visit later via ⋯</small></label>
+      </div>
       <div class="chips wrap-chips">${dateChips(date)}</div>
       <div class="form-grid">
         <label class="field"><span>Area</span><select class="input" name="area">${options(AREAS, '', { empty: 'All areas' })}</select></label>
@@ -511,10 +514,10 @@ export function planVisits(date, refresh, preselect = []) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      const r = await api('/api/tasks', { method: 'POST', body: { plan: { date: form.date.value, partner_ids: [...chosen] } } });
+      const r = await api('/api/tasks', { method: 'POST', body: { plan: { date: form.date.value, time: form.time.value || null, partner_ids: [...chosen] } } });
       m.close();
       selected = form.date.value;
-      toast(`${r.planned} visit${r.planned === 1 ? '' : 's'} planned for ${shortDate(form.date.value)}${r.skipped ? ` (${r.skipped} already planned)` : ''}`);
+      toast(`${r.planned} visit${r.planned === 1 ? '' : 's'} planned for ${shortDate(form.date.value)}${form.time.value ? ` at ${form.time.value}` : ''}${r.skipped ? ` (${r.skipped} already planned)` : ''}`);
       refresh();
     } catch (err) {
       toast(err.message, 'error');

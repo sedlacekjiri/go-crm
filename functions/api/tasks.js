@@ -4,7 +4,7 @@
 //        create / update (only sent fields). due_date is the deadline; start_date (optional)
 //        makes it a multi-day task shown as "in progress" from that day.
 //        subtasks: [{ id?, title, done }] – a checklist inside the task (replaces the whole list).
-//   POST { plan: { date: "YYYY-MM-DD", partner_ids: [...] } }              plan visits for a day
+//   POST { plan: { date: "YYYY-MM-DD", time?: "HH:MM", partner_ids: [...] } } plan visits for a day
 //   GET  ?done=1&from=YYYY-MM-DD               finished tasks, newest first (history; everyone logged in)
 //   DELETE ?id=…
 
@@ -52,7 +52,7 @@ export async function onRequestPost({ request, env }) {
     if (fresh.length) {
       await db.batch(
         fresh.map((pid) =>
-          db.prepare(`INSERT INTO tasks (id, type, category, partner_id, due_date, done, created_at) VALUES (?, 'visit', 'sales', ?, ?, 0, ?)`).bind(uuid(), pid, date, t)
+          db.prepare(`INSERT INTO tasks (id, type, category, partner_id, due_date, due_time, done, created_at) VALUES (?, 'visit', 'sales', ?, ?, ?, 0, ?)`).bind(uuid(), pid, date, isTime(b.plan.time) ? b.plan.time : null, t)
         )
       );
     }

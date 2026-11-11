@@ -493,3 +493,20 @@ describe('Home: welcome e-mails and next follow-ups', () => {
     assert.deepEqual(nextFollowUps(partners).map((p) => p.id), ['d', 'a', 'c']);
   });
 });
+
+describe('Planned visits with a time', () => {
+  it('puts timed visits first, earliest first, then the rest by area', async () => {
+    const { agenda } = await import('../public/js/lib.js');
+    const partners = [
+      { id: 'a', name: 'Arnarhvoll', area: '101' },
+      { id: 'b', name: 'Borg', area: '101' },
+      { id: 'c', name: 'Cabin', area: '105' },
+    ];
+    const tasks = [
+      { id: '1', type: 'visit', partner_id: 'a', due_date: '2026-11-12', done: 0 },
+      { id: '2', type: 'visit', partner_id: 'c', due_date: '2026-11-12', due_time: '14:00', done: 0 },
+      { id: '3', type: 'visit', partner_id: 'b', due_date: '2026-11-12', due_time: '10:30', done: 0 },
+    ];
+    assert.deepEqual(agenda('2026-11-12', { tasks, partners }).visits.map((v) => v.id), ['3', '2', '1']);
+  });
+});

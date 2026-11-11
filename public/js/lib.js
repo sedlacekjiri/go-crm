@@ -645,7 +645,7 @@ export const weekDays = (date) => Array.from({ length: 7 }, (_, i) => shiftDate(
 export const monthGrid = (month) => Array.from({ length: 42 }, (_, i) => shiftDate(weekStart(`${month}-01`), i));
 
 // What is on one day. category: '' (all) | 'sales' | 'marketing'.
-//   visits    planned hotel visits, sorted by area = walking route (sales)
+//   visits    planned hotel visits, timed ones first, then by area = walking route (sales)
 //   todos     tasks due that day (one-day tasks and deadlines)
 //   ongoing   multi-day tasks running that day (start_date ≤ day < deadline)
 //   followUps partner follow-ups not already covered by a planned visit (sales)
@@ -658,7 +658,7 @@ export function agenda(date, { tasks, partners, posts = [], events = [] }, categ
     .filter((t) => t.type === 'visit')
     .map((t) => ({ ...t, partner: byId.get(t.partner_id) }))
     .filter((t) => t.partner)
-    .sort((a, b) => a.done - b.done || (a.partner.area ?? '~').localeCompare(b.partner.area ?? '~') || a.partner.name.localeCompare(b.partner.name));
+    .sort((a, b) => a.done - b.done || (a.due_time ?? '99').localeCompare(b.due_time ?? '99') || (a.partner.area ?? '~').localeCompare(b.partner.area ?? '~') || a.partner.name.localeCompare(b.partner.name));
   const todos = onDay
     .filter((t) => t.type !== 'visit')
     .map((t) => ({ ...t, partner: byId.get(t.partner_id) ?? null }))
