@@ -64,7 +64,7 @@ export async function render(page, { params, refresh, isCurrent }) {
               <div class="chips">${p.welcome_sent ? '' : '<button type="button" data-welcome="today">Sent today</button>'}
                 <input class="input welcome-date" type="date" max="${today()}" value="${p.welcome_sent ?? ''}" data-welcome-date aria-label="Date the welcome e-mail was sent" />
                 ${p.welcome_sent ? '<button type="button" data-welcome="clear">Clear</button>' : ''}</div></div>
-            ${p.stage === 'declined' && p.declined_reason ? `<p class="muted" style="margin-top:12px">Declined: ${esc(p.declined_reason)}</p>` : ''}
+            ${['declined', 'on_hold'].includes(p.stage) && p.declined_reason ? `<p class="muted" style="margin-top:12px">${p.stage === 'on_hold' ? 'On hold' : 'Declined'}: ${esc(p.declined_reason)}</p>` : ''}
           </section>`
             : ''
         }
@@ -163,9 +163,9 @@ export async function render(page, { params, refresh, isCurrent }) {
     const d = el.dataset;
     if (d.stage && d.stage !== p.stage) {
       const moved = `Moved to ${STAGES.find((s) => s.value === d.stage).label}`;
-      if (p.stage !== 'new') return patch({ stage: d.stage }, moved);
-      const day = await askVisitDate(p);
-      if (day) patch({ stage: d.stage, visited_on: day }, moved);
+      const visited_on = p.stage === 'new' ? await askVisitDate(p) : undefined;
+      if (d.stage !== 'on_hold') return patch({ stage: d.stage, visited_on }, moved);
+      patch({ stage: 'on_hold', visited_on, ...(await askHold(p)) }, moved);
     } else if (d.dateActivity) activityDate(activities.find((a) => a.id === d.dateActivity), refresh);
     else if (d.interest) patch({ interest: p.interest === Number(d.interest) ? null : Number(d.interest) });
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
@@ -282,6 +282,36 @@ function askDay(title, label, { note = false } = {}) {
       if (!form.day.value || form.day.value > today()) return toast('Pick a day up to today', 'error');
       m.close();
       resolve({ day: form.day.value, note: form.note?.value.trim() ?? '' });
+    });
+  });
+}
+
+// On hold: why, and when to get back to them (shows up in Tasks like any follow-up).
+// Resolves with { declined_reason, next_follow_up }, or never if the window is closed.
+export function askHold(p) {
+  return new Promise((resolve) => {
+    const m = openModal(
+      `${p.name} – on hold`,
+      `<form>
+        <label class="field"><span>Why on hold?</span><input class="input" name="reason" value="${esc(p.declined_reason ?? '')}" placeholder="Contract with another rental until end of January…" /></label>
+        <label class="field"><span>Get back to them on</span><input class="input" type="date" name="day" value="${esc(p.next_follow_up && p.next_follow_up > today() ? p.next_follow_up : '')}" min="${today()}" /></label>
+        <div class="chips">${[1, 2, 3, 6].map((n) => `<button type="button" data-months="${n}">In ${n} month${n > 1 ? 's' : ''}</button>`).join('')}</div>
+        <small class="muted">It shows up in Tasks on that day.</small>
+        <button class="btn block" type="submit">Put on hold</button>
+      </form>`
+    );
+    const form = m.el.querySelector('form');
+    m.el.querySelectorAll('[data-months]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const d = new Date(`${today()}T12:00`);
+        d.setMonth(d.getMonth() + Number(b.dataset.months));
+        form.day.value = d.toISOString().slice(0, 10);
+      })
+    );
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      m.close();
+      resolve({ declined_reason: form.reason.value.trim() || null, next_follow_up: form.day.value || null });
     });
   });
 }

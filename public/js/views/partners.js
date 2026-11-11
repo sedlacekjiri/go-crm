@@ -191,6 +191,7 @@ function bulkEdit(list, done) {
         <label class="field"><span>Date of the visit / meeting</span><input class="input" type="date" name="day" value="${today()}" max="${today()}" /></label>
       </div>
       <small class="muted" data-visit-hint></small>
+      <label class="field hidden" data-reason><span>Why?</span><input class="input" name="declined_reason" placeholder="Contract with another rental until end of January…" /></label>
       <label class="field"><span>Note for their history (optional)</span><textarea class="input" name="note" rows="3" placeholder="Met the Center Hotels sales manager – talked about all their hotels, flyers to every reception…"></textarea></label>
       <div class="form-grid">
         <label class="field"><span>Interest</span><select class="input" name="interest">${options(INTEREST, '', { empty: 'No change' })}</select></label>
@@ -214,6 +215,9 @@ function bulkEdit(list, done) {
   );
   const form = m.el.querySelector('form');
   const hint = () => {
+    const reason = ['on_hold', 'declined'].includes(form.stage.value);
+    m.el.querySelector('[data-reason]').classList.toggle('hidden', !reason);
+    m.el.querySelector('[data-reason] span').textContent = form.stage.value === 'on_hold' ? 'Why on hold? (set Next follow-up for when to talk again)' : 'Why did they say no?';
     const leaving = form.stage.value && form.stage.value !== 'new' && toVisit;
     m.el.querySelector('[data-visit-hint]').textContent = leaving
       ? `${toVisit} of them are “To visit” – each gets a visit logged on this date.`
@@ -234,6 +238,7 @@ function bulkEdit(list, done) {
     if (f.interest) set.interest = Number(f.interest);
     if (f.next_follow_up) set.next_follow_up = f.next_follow_up;
     if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
+    if (['on_hold', 'declined'].includes(f.stage) && f.declined_reason.trim()) set.declined_reason = f.declined_reason;
     const contact = f.c_name.trim() ? { name: f.c_name, role: f.c_role, phone: f.c_phone, email: f.c_email } : null;
     if ((f.c_role || f.c_phone || f.c_email) && !contact) return toast('Add the contact person’s name', 'error');
     if (!Object.keys(set).length && !f.note.trim() && !contact && !f.followup_mail) return toast('Nothing to change', 'error');

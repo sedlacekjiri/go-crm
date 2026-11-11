@@ -3,7 +3,7 @@
 import { codeOwner, int, isDate, now, oneOf, str, uuid } from './db.js';
 
 export const TYPES = ['hotel', 'guesthouse', 'hostel', 'campsite', 'ota', 'cafe', 'other'];
-const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined'];
+const STAGES = ['new', 'contacted', 'in_talks', 'accepted', 'declined', 'on_hold'];
 
 const FIELDS = {
   name: (v) => str(v, 200),

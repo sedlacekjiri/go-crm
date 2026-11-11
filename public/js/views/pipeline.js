@@ -1,10 +1,10 @@
-// Kanban for walking in: To visit → Visited → Interested → Partner / Declined.
+// Kanban for walking in: To visit → Visited → Interested → Partner / Declined / On hold.
 // Cards move with ← → (works on phones). "To visit" is grouped by area to plan a route.
 import { followUpPill, interestBadge, kpi, pageHeader } from '../components.js';
-import { capacityText, nextPlannedVisit, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
+import { capacityText, nextPlannedVisit, OPEN_STAGES, PARTNER_TYPES, STAGES, today, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, options, shortDate, toast } from '../util.js';
-import { askVisitDate } from './partner.js';
+import { askHold, askVisitDate } from './partner.js';
 
 let typeFilter = '';
 
@@ -27,7 +27,7 @@ export function render(page, { refresh }) {
       ${kpi('On the list', partners.length, `${count('new')} still to visit`)}
       ${kpi('Visited', reached, partners.length ? `${Math.round((reached / partners.length) * 100)} % of the list` : '–')}
       ${kpi('Partners', count('accepted'), `${count('in_talks')} interested`)}
-      ${kpi('Win rate', decided ? `${Math.round((count('accepted') / decided) * 100)} %` : '–', `${count('accepted')} partners / ${count('declined')} declined`)}
+      ${kpi('Win rate', decided ? `${Math.round((count('accepted') / decided) * 100)} %` : '–', `${count('accepted')} partners / ${count('declined')} declined${count('on_hold') ? ` · ${count('on_hold')} on hold` : ''}`)}
     </div>
     <div class="board">
       ${STAGES.map((s) => {
@@ -51,7 +51,7 @@ export function render(page, { refresh }) {
                   <div class="tags">${interestBadge(p.interest)}${(() => {
                     const d = nextPlannedVisit(p.id, state.tasks);
                     return d ? `<span class="pill ${d < today() ? 'overdue' : d === today() ? 'today' : ''}">📅 ${d === today() ? 'Today' : shortDate(d)}</span>` : '';
-                  })()}${['new', 'contacted', 'in_talks'].includes(s.value) && p.next_follow_up ? followUpPill(p.next_follow_up) : ''}</div>
+                  })()}${OPEN_STAGES.includes(s.value) && p.next_follow_up ? followUpPill(p.next_follow_up) : ''}</div>
                 </a>
                 ${
                   admin
@@ -77,9 +77,10 @@ export function render(page, { refresh }) {
     const next = order[order.indexOf(p.stage) + Number(b.dataset.dir)];
     if (!next) return;
     const visited_on = p.stage === 'new' ? await askVisitDate(p) : undefined;
+    const hold = next === 'on_hold' ? await askHold(p) : {};
     b.closest('.kcard').style.opacity = 0.5;
     try {
-      await api('/api/partners', { method: 'POST', body: { id: p.id, stage: next, visited_on } });
+      await api('/api/partners', { method: 'POST', body: { id: p.id, stage: next, visited_on, ...hold } });
       refresh();
     } catch (err) {
       toast(err.message, 'error');

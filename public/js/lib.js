@@ -21,7 +21,10 @@ export const STAGES = [
   { value: 'in_talks', label: 'Interested', hint: 'Wants it – visit again / meet the manager' },
   { value: 'accepted', label: 'Partner', hint: 'Agreed – affiliate link + materials' },
   { value: 'declined', label: 'Declined', hint: 'Said no (for now)' },
+  { value: 'on_hold', label: 'On hold', hint: 'Not now – talk again later (e.g. contract with another rental)' },
 ];
+// Stages that still need a follow-up.
+export const OPEN_STAGES = ['new', 'contacted', 'in_talks', 'on_hold'];
 
 // One-tap results of a visit, added to the visit note.
 export const VISIT_OUTCOMES = [

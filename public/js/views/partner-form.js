@@ -1,7 +1,7 @@
 // Add / edit a partner – a step-by-step form in plain words:
 //   1 The place · 2 Who you talked to (new only) · 3 Where you are with them · 4 Partnership (only for partners)
 import { emptyBox, pageHeader } from '../components.js';
-import { AREAS, capacityOf, chainSuggestions, hasStars, INTEREST, PARTNER_TYPES, shiftDate, today } from '../lib.js';
+import { AREAS, capacityOf, chainSuggestions, hasStars, INTEREST, OPEN_STAGES, PARTNER_TYPES, shiftDate, today } from '../lib.js';
 import { api, isAdmin, loadData, state } from '../store.js';
 import { esc, formData, options, toast } from '../util.js';
 
@@ -12,6 +12,7 @@ const STAGE_CHOICES = [
   { value: 'in_talks', label: 'Interested', text: 'They like it – I need to come back or meet the manager' },
   { value: 'accepted', label: 'Partner', text: 'They said yes – they’ll recommend us' },
   { value: 'declined', label: 'Declined', text: 'They said no (for now)' },
+  { value: 'on_hold', label: 'On hold', text: 'Not now – e.g. a contract with another rental until a set date' },
 ];
 
 const INTEREST_TEXT = { 1: 'Not really', 2: 'Some interest', 3: 'Very keen' };
@@ -112,7 +113,7 @@ export function render(page, { params, query }) {
             <small>It shows up in Tasks on that day.</small>
           </div>
         </div>
-        <label class="field" data-declined-only style="margin-top:14px"><span>Why did they say no?</span><input class="input" name="declined_reason" value="${v('declined_reason')}" placeholder="Already works with another rental, chain policy…" /></label>
+        <label class="field" data-declined-only style="margin-top:14px"><span data-reason-label>Why did they say no?</span><input class="input" name="declined_reason" value="${v('declined_reason')}" placeholder="Already works with another rental, chain policy…" /></label>
       </section>
 
       <section class="card step" data-partner-only>
@@ -152,8 +153,9 @@ export function render(page, { params, query }) {
       page.querySelector('[data-capacity-hint]').textContent =
         cap === 'pitches' ? 'More pitches = more campers & road-trippers.' : cap === 'beds' ? 'Busy hostels = lots of young travellers renting together.' : 'Bigger hotels = more guests who need a car.';
     }
-    show('[data-open-only]', ['new', 'contacted', 'in_talks'].includes(stage));
-    show('[data-declined-only]', stage === 'declined');
+    show('[data-open-only]', OPEN_STAGES.includes(stage));
+    show('[data-declined-only]', stage === 'declined' || stage === 'on_hold');
+    page.querySelector('[data-reason-label]').textContent = stage === 'on_hold' ? 'Why on hold – and until when?' : 'Why did they say no?';
     show('[data-partner-only]', stage === 'accepted');
     const hint = page.querySelector('[data-visit-hint]');
     const leavingNew = (!editing || editing.stage === 'new') && stage !== 'new';
@@ -196,9 +198,9 @@ export function render(page, { params, query }) {
       email: f.email,
       website: f.website,
       stage,
-      interest: ['new', 'contacted', 'in_talks'].includes(stage) ? interest : editing?.interest ?? interest,
-      next_follow_up: ['new', 'contacted', 'in_talks'].includes(stage) ? f.next_follow_up || null : null,
-      declined_reason: stage === 'declined' ? f.declined_reason : editing?.declined_reason ?? null,
+      interest: OPEN_STAGES.includes(stage) ? interest : editing?.interest ?? interest,
+      next_follow_up: OPEN_STAGES.includes(stage) ? f.next_follow_up || null : null,
+      declined_reason: stage === 'declined' || stage === 'on_hold' ? f.declined_reason : editing?.declined_reason ?? null,
       affiliate_code: f.affiliate_code,
       affiliate_url: f.affiliate_url,
       notes: f.notes,
