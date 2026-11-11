@@ -147,6 +147,22 @@ export const CHECKLIST_TEMPLATES = {
   story: ['Content', 'Stickers / link', 'Post'],
 };
 
+// Welcome e-mails: how many went out (all time, this month, last 7 days) and how many visited
+// places still wait for one (To visit and Declined don't need one yet).
+export function welcomeStats(partners, t = today()) {
+  const sent = partners.filter((p) => p.welcome_sent).map((p) => p.welcome_sent);
+  return {
+    total: sent.length,
+    month: sent.filter((d) => monthOf(d) === monthOf(t)).length,
+    week: sent.filter((d) => d > shiftDate(t, -7) && d <= t).length,
+    toSend: partners.filter((p) => !p.welcome_sent && !['new', 'declined'].includes(p.stage)).length,
+  };
+}
+
+// Open partners with a follow-up date, soonest first (overdue at the top).
+export const nextFollowUps = (partners) =>
+  partners.filter((p) => p.next_follow_up && isOpenStage(p)).sort((a, b) => a.next_follow_up.localeCompare(b.next_follow_up) || a.name.localeCompare(b.name));
+
 // Posts around today: published in the last 7 days (by when they actually went live), and what is
 // planned for the next 7 days. Uses rolling windows, so Monday mornings don't show an empty week.
 export function postWeekStats(posts, t = today()) {

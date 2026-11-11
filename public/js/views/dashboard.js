@@ -1,6 +1,6 @@
 // Home: the overview for you (follow-ups) and the owners (results).
 import { revenueChart } from '../chart.js';
-import { assigneeAvatar, avatar, followUpPill, kpi, stageBadge } from '../components.js';
+import { assigneeAvatar, avatar, followUpPill, kpi, miniKpi, stageBadge } from '../components.js';
 import {
   activityLabel,
   actuals,
@@ -13,6 +13,7 @@ import {
   isPartnerSale,
   monthElapsed,
   monthOf,
+  nextFollowUps,
   partnerByCode,
   revenueByPartner,
   revenueSeries,
@@ -20,6 +21,7 @@ import {
   STAGES,
   today,
   totals,
+  welcomeStats,
 } from '../lib.js';
 import { can, currency, isAdmin, loadSales, state, assigneeId, taskPerson } from '../store.js';
 import { dateTime, esc, money, monthLabel, num, pct, shortDate } from '../util.js';
@@ -62,6 +64,9 @@ export async function render(page, { isCurrent }) {
   const byId = new Map(state.partners.map((p) => [p.id, p]));
   const recent = state.activities.slice(0, 8);
   const maxStage = Math.max(1, ...STAGES.map((s) => count(s.value)));
+  const welcome = welcomeStats(state.partners, t);
+  const lastWelcome = state.partners.filter((p) => p.welcome_sent).sort((a, b) => b.welcome_sent.localeCompare(a.welcome_sent)).slice(0, 5);
+  const follows = nextFollowUps(state.partners);
   const fmtGoal = (metric, v) => (metric === 'revenue_eur' ? money(v, 'EUR') : num(v));
 
   page.innerHTML = `
@@ -134,6 +139,38 @@ export async function render(page, { isCurrent }) {
                 )
                 .join('')}</div>`
             : '<p class="empty">No partner bookings yet. They show up once a partner’s affiliate code appears in imported sales.</p>'
+        }
+      </section>
+    </div>
+
+    <div class="grid grid-side">
+      <section class="card">
+        <div class="card-head"><h2>Next follow-ups <span class="muted">(${follows.length})</span></h2><a class="link-btn" href="#/tasks">Tasks →</a></div>
+        ${
+          follows.length
+            ? `<div class="list">${follows
+                .slice(0, 10)
+                .map(
+                  (p) => `<a class="row" href="#/partner/${p.id}"><span class="name"><b>${esc(p.name)}</b><br><span class="muted small">${esc([STAGES.find((s) => s.value === p.stage)?.label, p.chain, p.area?.replace(/\s*\(.*\)/, '')].filter(Boolean).join(' · '))}</span></span><span class="row-end">${followUpPill(p.next_follow_up)}</span></a>`
+                )
+                .join('')}${follows.length > 10 ? `<a class="link-btn" style="padding:6px 8px" href="#/pipeline">+ ${follows.length - 10} more</a>` : ''}</div>`
+            : '<p class="empty">No follow-ups planned. Set one on a partner’s page.</p>'
+        }
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Welcome e-mails</h2><a class="link-btn" href="#/partners?type=hotel&welcome=not_sent">Not sent →</a></div>
+        <div class="mini-kpis two">
+          ${miniKpi('Sent in total', num(welcome.total))}
+          ${miniKpi(monthLabel(month).split(' ')[0], num(welcome.month))}
+          ${miniKpi('Last 7 days', num(welcome.week))}
+          ${miniKpi('Visited, not sent yet', num(welcome.toSend))}
+        </div>
+        ${
+          lastWelcome.length
+            ? `<div class="list" style="margin-top:10px">${lastWelcome
+                .map((p) => `<a class="row" href="#/partner/${p.id}"><span class="name">${esc(p.name)}</span><span class="val muted small">${shortDate(p.welcome_sent)}</span></a>`)
+                .join('')}</div>`
+            : ''
         }
       </section>
     </div>

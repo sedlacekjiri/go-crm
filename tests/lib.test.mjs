@@ -473,3 +473,22 @@ describe('mapsUrls', () => {
     assert.match(mapsUrls({ name: 'Kex', area: '101 Miðborg (Downtown)' }).open, /query=Kex%2C%20101%20Mi%C3%B0borg%2C%20Iceland$/);
   });
 });
+
+describe('Home: welcome e-mails and next follow-ups', () => {
+  const partners = [
+    { id: 'a', name: 'Borg', stage: 'contacted', welcome_sent: '2026-11-10', next_follow_up: '2026-11-20' },
+    { id: 'b', name: 'Kex', stage: 'accepted', welcome_sent: '2026-10-02', next_follow_up: '2026-11-01' },
+    { id: 'c', name: 'Plaza', stage: 'on_hold', next_follow_up: '2027-01-05' },
+    { id: 'd', name: 'Arnarhvoll', stage: 'in_talks', next_follow_up: '2026-11-05' },
+    { id: 'e', name: 'Lóa', stage: 'new' },
+    { id: 'f', name: 'Skuggi', stage: 'declined', next_follow_up: '2026-11-12' },
+  ];
+  it('counts welcome e-mails sent and visited places still without one', async () => {
+    const { welcomeStats } = await import('../public/js/lib.js');
+    assert.deepEqual(welcomeStats(partners, '2026-11-11'), { total: 2, month: 1, week: 1, toSend: 2 });
+  });
+  it('lists open follow-ups soonest first, including on hold, without partners or declined', async () => {
+    const { nextFollowUps } = await import('../public/js/lib.js');
+    assert.deepEqual(nextFollowUps(partners).map((p) => p.id), ['d', 'a', 'c']);
+  });
+});

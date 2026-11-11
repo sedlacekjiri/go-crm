@@ -13,6 +13,8 @@ const selected = new Set();
 
 export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
+  // Home links straight to e.g. “no welcome e-mail yet”.
+  if (query.has('welcome')) filters.welcome = query.get('welcome');
   const type = PARTNER_TYPES.some((t) => t.value === query.get('type')) ? query.get('type') : 'hotel';
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
   // A chain filter from another tab doesn't apply here (and its select may not even be shown).
