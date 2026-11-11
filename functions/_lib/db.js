@@ -521,6 +521,7 @@ const MIGRATIONS = [
   `ALTER TABLE reviews ADD COLUMN reply_at TEXT`,
   `ALTER TABLE files ADD COLUMN folder_id TEXT`, // Files page folder (null = not in a folder)
   `ALTER TABLE posts ADD COLUMN assignee_id TEXT`, // who makes the post
+  `ALTER TABLE posts ADD COLUMN series_id TEXT`, // repeating post: the id of the first one
   `ALTER TABLE tasks ADD COLUMN followers TEXT`, // JSON ids: people @mentioned in its comments see the task
   `ALTER TABLE partners ADD COLUMN welcome_sent TEXT`, // date the welcome / intro e-mail went out
   `ALTER TABLE partners ADD COLUMN welcome_reply TEXT`, // date they replied to it

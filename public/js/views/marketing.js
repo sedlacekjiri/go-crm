@@ -15,6 +15,7 @@ import {
   marketingDeadlines,
   postWeekStats,
   postStatusLabel,
+  repeatDates,
   reviewGrowth,
   reviewStats,
   shiftDate,
@@ -385,6 +386,25 @@ export function postModal(post, refresh) {
         <label class="field"><span>Publish date</span><input class="input" type="date" name="publish_date" value="${esc(post.publish_date ?? '')}" /></label>
         <label class="field"><span>Time</span><input class="input" type="time" name="publish_time" value="${esc(post.publish_time ?? '')}" /></label>
       </div>
+      ${
+        post.id
+          ? post.series_id
+            ? `<p class="muted small" style="margin:-4px 0 12px">🔁 Part of a repeating series – changes here apply to this post only.</p>`
+            : ''
+          : `<div class="form-grid" data-repeat-row>
+        <label class="field"><span>Repeat</span><select class="input" name="repeat">${options(
+          [
+            { value: 'week', label: 'Every week' },
+            { value: '2weeks', label: 'Every 2 weeks' },
+            { value: 'month', label: 'Every month' },
+          ],
+          '',
+          { empty: 'Doesn’t repeat' }
+        )}</select></label>
+        <label class="field" data-until hidden><span>Until</span><input class="input" type="date" name="repeat_until" /></label>
+      </div>
+      <small class="muted" data-repeat-hint style="display:block;margin:-6px 0 12px"></small>`
+      }
       <label class="field"><span>Content ready by (deadline)</span>
         <div class="follow-row"><input class="input" type="date" name="deadline" value="${esc(post.deadline ?? '')}" />
           <div class="chips wrap-chips" data-dl-quick>${[
@@ -410,7 +430,8 @@ export function postModal(post, refresh) {
       <label class="field"><span>Notes</span><textarea class="input" name="notes" rows="2">${esc(post.notes ?? '')}</textarea></label>
       ${filesFieldHtml(isAdmin())}
       ${isAdmin() ? `<button class="btn block" type="submit">${post.id ? 'Save' : post.status === 'idea' ? 'Save idea' : 'Add post'}</button>` : ''}
-      ${isAdmin() && post.id ? '<button class="btn danger block" type="button" data-remove>Delete</button>' : ''}
+      ${isAdmin() && post.id ? `<button class="btn danger block" type="button" data-remove>Delete${post.series_id ? ' this post' : ''}</button>` : ''}
+      ${isAdmin() && post.id && post.series_id ? '<button class="btn secondary block" type="button" data-remove-following>Delete this and all later repeats</button>' : ''}
     </form>
     ${commentsHtml('post', post.id)}`
   );
@@ -431,6 +452,24 @@ export function postModal(post, refresh) {
     form.deadline.value = d < today() ? today() : d;
     if (d < today()) toast('Goes live soon – deadline set to today');
   });
+  // Repeat: copies on every chosen date (each its own post), shown as a count before saving.
+  const repeatList = () => (form.repeat?.value ? repeatDates(form.publish_date.value, form.repeat.value, form.repeat_until.value) : []);
+  const repeatHint = () => {
+    const hint = m.el.querySelector('[data-repeat-hint]');
+    if (!hint) return;
+    m.el.querySelector('[data-until]').hidden = !form.repeat.value;
+    if (form.repeat.value && !form.repeat_until.value && form.publish_date.value) form.repeat_until.value = shiftDate(form.publish_date.value, form.repeat.value === 'month' ? 182 : 56);
+    const list = repeatList();
+    const day = form.publish_date.value ? new Date(`${form.publish_date.value}T12:00`).toLocaleDateString('en-GB', { weekday: 'long' }) : '';
+    hint.textContent = !form.repeat.value
+      ? ''
+      : !form.publish_date.value
+        ? 'Set the publish date first.'
+        : `${list.length + 1} posts: ${form.repeat.value === 'month' ? 'every month' : `every ${form.repeat.value === '2weeks' ? 'other ' : ''}${day}`} until ${shortDate(list.at(-1) ?? form.publish_date.value)}. Each is its own post you can change.`;
+  };
+  form.repeat?.addEventListener('change', repeatHint);
+  form.repeat_until?.addEventListener('input', repeatHint);
+  form.publish_date.addEventListener('input', repeatHint);
   const whenRow = m.el.querySelector('[data-when]');
   const sync = () => (whenRow.style.opacity = status === 'idea' ? 0.5 : 1);
   sync();
@@ -455,15 +494,30 @@ export function postModal(post, refresh) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = formData(form);
+    const repeat_dates = repeatList();
+    if (form.repeat?.value && !repeat_dates.length) return toast('Pick an “until” date after the publish date', 'error');
+    delete f.repeat;
+    delete f.repeat_until;
     try {
       const saved = await api('/api/posts', {
         method: 'POST',
-        body: { ...f, id: post.id, status, channels: [...chosen], brand: f.brand || null, format: f.format || null, theme: f.theme || null, subtasks: getChecklist(), ...(isAdmin() ? { assignee_id: assignee() } : {}) },
+        body: { ...f, id: post.id, repeat_dates, status, channels: [...chosen], brand: f.brand || null, format: f.format || null, theme: f.theme || null, subtasks: getChecklist(), ...(isAdmin() ? { assignee_id: assignee() } : {}) },
       });
       await files.flush(saved.id);
       m.close();
-      toast(post.id ? 'Saved' : status === 'idea' ? 'Idea saved' : 'Post planned');
+      toast(post.id ? 'Saved' : saved.repeated ? `${saved.repeated + 1} posts planned` : status === 'idea' ? 'Idea saved' : 'Post planned');
       if (f.publish_date) v.selected = f.publish_date;
+      refresh();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+  m.el.querySelector('[data-remove-following]')?.addEventListener('click', async () => {
+    if (!confirm('Delete this post and all later repeats of it?')) return;
+    try {
+      const r = await api(`/api/posts?id=${post.id}&following=1`, { method: 'DELETE' });
+      m.close();
+      toast(`Deleted ${r.deleted} posts`);
       refresh();
     } catch (err) {
       toast(err.message, 'error');

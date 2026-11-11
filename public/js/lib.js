@@ -249,6 +249,24 @@ export function shiftDate(date, days) {
   return d.toISOString().slice(0, 10);
 }
 
+// Repeats of a post after `start`: every week, 2 weeks or month, up to `until` (max 52).
+// Monthly keeps the day of the month (31st → the month's last day).
+export function repeatDates(start, every, until) {
+  const out = [];
+  if (!start || !until || until <= start) return out;
+  for (let i = 1; out.length < 52; i++) {
+    let d;
+    if (every === 'month') {
+      const [y, m, day] = start.split('-').map(Number);
+      const last = new Date(Date.UTC(y, m - 1 + i + 1, 0)).getUTCDate();
+      d = new Date(Date.UTC(y, m - 1 + i, Math.min(day, last))).toISOString().slice(0, 10);
+    } else d = shiftDate(start, i * (every === '2weeks' ? 14 : 7));
+    if (d > until) break;
+    out.push(d);
+  }
+  return out;
+}
+
 export const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
 
 // ── Caren import ───────────────────────────────────────────────

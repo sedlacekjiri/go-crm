@@ -510,3 +510,17 @@ describe('Planned visits with a time', () => {
     assert.deepEqual(agenda('2026-11-12', { tasks, partners }).visits.map((v) => v.id), ['3', '2', '1']);
   });
 });
+
+describe('Repeating posts', () => {
+  it('repeats every week / 2 weeks / month up to the until date', async () => {
+    const { repeatDates } = await import('../public/js/lib.js');
+    assert.deepEqual(repeatDates('2026-11-13', 'week', '2026-12-04'), ['2026-11-20', '2026-11-27', '2026-12-04']);
+    assert.deepEqual(repeatDates('2026-11-13', '2weeks', '2026-12-31'), ['2026-11-27', '2026-12-11', '2026-12-25']);
+    assert.deepEqual(repeatDates('2027-01-31', 'month', '2027-04-30'), ['2027-02-28', '2027-03-31', '2027-04-30']);
+  });
+  it('stops at 52 and needs an until date after the start', async () => {
+    const { repeatDates } = await import('../public/js/lib.js');
+    assert.equal(repeatDates('2026-01-02', 'week', '2030-01-01').length, 52);
+    assert.deepEqual(repeatDates('2026-11-13', 'week', '2026-11-13'), []);
+  });
+});
