@@ -58,6 +58,11 @@ export async function savePartner(db, body, { visitLogged = false } = {}) {
   // body.visited_on: the day it actually happened, when it's confirmed later.
   const visitedOn = isDate(body.visited_on) && body.visited_on <= now().slice(0, 10) ? body.visited_on : null;
   if (!visitLogged && (!existing || existing.stage === 'new') && row.stage !== 'new') await recordVisit(db, row.id, visitedOn, str(body.visit_note, 5000));
+  // Going on hold is noted in the activity history with the reason and when to talk again.
+  if (row.stage === 'on_hold' && existing?.stage !== 'on_hold') {
+    const summary = ['On hold', row.declined_reason, row.next_follow_up && `talk again ${row.next_follow_up.split('-').reverse().join('.')}`].filter(Boolean).join(' – ');
+    await db.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'note', ?, ?, ?)`).bind(uuid(), row.id, now(), summary, now()).run();
+  }
   return { partner: row };
 }
 
