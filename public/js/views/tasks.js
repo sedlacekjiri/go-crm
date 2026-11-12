@@ -1,7 +1,7 @@
-// Tasks & calendar: hotel visits, to-dos with deadlines, follow-ups and marketing posts – split into
+// Tasks & calendar: partner visits, to-dos with deadlines, follow-ups and marketing posts – split into
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
-import { agenda, AREAS, eventTimeText, laterItems, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, visitStats, weekDays } from '../lib.js';
+import { agenda, AREAS, eventTimeText, laterItems, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, PARTNER_TYPES, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, typeLabel, visitStats, weekDays } from '../lib.js';
 import { commentChip, commentsHtml, mountComments } from '../comments.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
@@ -245,7 +245,7 @@ export function render(page, ctx) {
   ];
   const visitGroup = (a) =>
     a.visits.length
-      ? `<div class="visit-group"><div class="vg-head">🏨 Hotel visits <span class="muted">· ${a.visits.filter((v) => v.done).length}/${a.visits.length} done · ${a.visits.some((v) => v.due_time) ? 'by time, then area' : 'by area'}</span></div><ul class="tasks">${a.visits.map(visitRow).join('')}</ul></div>`
+      ? `<div class="visit-group"><div class="vg-head">📍 Visits <span class="muted">· ${a.visits.filter((v) => v.done).length}/${a.visits.length} done · ${a.visits.some((v) => v.due_time) ? 'by time, then area' : 'by area'}</span></div><ul class="tasks">${a.visits.map(visitRow).join('')}</ul></div>`
       : '';
   const dayName = (d) => (d === t ? 'Today' : d === shiftDate(t, 1) ? 'Tomorrow' : new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'long' }));
   const daySection = (d) => {
@@ -313,7 +313,7 @@ export function render(page, ctx) {
       ${(() => {
         const rows = dayRows(day, selected);
         const v = visitGroup(day);
-        return rows.length || v ? `${rows.length ? `<ul class="tasks">${rows.join('')}</ul>` : ''}${v}` : `<p class="empty">Nothing planned for this day.${admin && can('sales') ? ' Use “Plan visits” to pick the hotels you’ll walk into.' : ''}</p>`;
+        return rows.length || v ? `${rows.length ? `<ul class="tasks">${rows.join('')}</ul>` : ''}${v}` : `<p class="empty">Nothing planned for this day.${admin && can('sales') ? ' Use “Plan visits” to pick the places you’ll walk into.' : ''}</p>`;
       })()}
     </section>`;
   }
@@ -520,7 +520,7 @@ async function googleCalendarFeed() {
 // Pick partners for a day. "To visit" first, grouped by area so the list reads like a walking route.
 export function planVisits(date, refresh, preselect = []) {
   const visits = visitStats(state.activities);
-  const filter = { stages: new Set(['new']), area: '', q: '' };
+  const filter = { stages: new Set(['new']), type: '', area: '', q: '' };
   const chosen = new Set(preselect);
   const m = openModal(
     'Plan visits',
@@ -532,8 +532,11 @@ export function planVisits(date, refresh, preselect = []) {
       <div class="chips wrap-chips">${dateChips(date)}</div>
       <div class="form-grid">
         <label class="field"><span>Area</span><select class="input" name="area">${options(AREAS, '', { empty: 'All areas' })}</select></label>
-        <label class="field"><span>Search</span><input class="input" type="search" name="q" placeholder="Hotel name…" /></label>
+        <label class="field"><span>Search</span><input class="input" type="search" name="q" placeholder="Name…" /></label>
       </div>
+      <div class="chips wrap-chips" data-types>${[{ value: '', label: 'All types' }, ...PARTNER_TYPES.filter((t) => state.partners.some((p) => p.type === t.value))]
+        .map((t) => `<button type="button" data-t="${t.value}" aria-pressed="${filter.type === t.value}">${t.label}</button>`)
+        .join('')}</div>
       <div class="chips wrap-chips" data-stages>${STAGES.filter((s) => s.value !== 'declined')
         .map((s) => `<button type="button" data-s="${s.value}" aria-pressed="${filter.stages.has(s.value)}">${s.label}</button>`)
         .join('')}</div>
@@ -547,7 +550,7 @@ export function planVisits(date, refresh, preselect = []) {
   const draw = () => {
     const q = filter.q.trim().toLowerCase();
     const list = state.partners
-      .filter((p) => (filter.stages.has(p.stage) || chosen.has(p.id)) && (!filter.area || p.area === filter.area) && (!q || p.name.toLowerCase().includes(q)))
+      .filter((p) => (filter.stages.has(p.stage) || chosen.has(p.id)) && (!filter.type || p.type === filter.type) && (!filter.area || p.area === filter.area) && (!q || p.name.toLowerCase().includes(q)))
       .sort((a, b) => (a.area ?? '~').localeCompare(b.area ?? '~') || a.name.localeCompare(b.name));
     let lastArea = null;
     m.el.querySelector('[data-list]').innerHTML = list.length
@@ -558,7 +561,7 @@ export function planVisits(date, refresh, preselect = []) {
             const st = visits.get(p.id);
             const planned = nextPlannedVisit(p.id, state.tasks);
             return `${head}<label class="pick"><input type="checkbox" value="${p.id}" ${chosen.has(p.id) ? 'checked' : ''} />
-              <span class="body"><b>${esc(p.name)}</b><span class="meta">${esc(STAGES.find((s) => s.value === p.stage).label)}${st ? ` · ${st.count}× visited, last ${shortDate(st.last)}` : ''}${
+              <span class="body"><b>${esc(p.name)}</b><span class="meta">${esc(typeLabel(p.type))} · ${esc(STAGES.find((s) => s.value === p.stage).label)}${st ? ` · ${st.count}× visited, last ${shortDate(st.last)}` : ''}${
                 planned ? ` · <span class="planned">planned ${shortDate(planned)}</span>` : ''
               }</span></span></label>`;
           })
@@ -573,11 +576,18 @@ export function planVisits(date, refresh, preselect = []) {
   };
   draw();
 
-  // Ticking a hotel only updates the button, so the list keeps its scroll position.
+  // Ticking a place only updates the button, so the list keeps its scroll position.
   m.el.querySelector('[data-list]').addEventListener('change', (e) => {
     if (e.target.checked) chosen.add(e.target.value);
     else chosen.delete(e.target.value);
     updateButton();
+  });
+  m.el.querySelector('[data-types]').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    filter.type = b.dataset.t;
+    m.el.querySelectorAll('[data-types] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    draw();
   });
   m.el.querySelector('[data-stages]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-s]');
