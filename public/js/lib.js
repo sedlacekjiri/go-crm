@@ -1418,11 +1418,17 @@ export function distanceKm(a, b) {
 
 export const distanceText = (km) => (km < 1 ? `${Math.max(10, Math.round(km * 100) * 10)} m` : `${km.toFixed(km < 10 ? 1 : 0)} km`);
 
-// A sensible order to visit the stops: start with the first, then always the nearest one left.
-export function routeOrder(stops) {
+// Our office: every trip starts here.
+export const OFFICE = { name: 'Go office', address: 'Skógarhlíð 16, 105 Reykjavík' };
+
+// A sensible order to visit the stops: the one nearest to `start` (e.g. the office) first – or the
+// first one given – then always the nearest one left.
+export function routeOrder(stops, start = null) {
   const left = stops.filter(hasPin);
   if (!left.length) return [];
-  const out = [left.shift()];
+  let first = 0;
+  if (hasPin(start)) for (let i = 1; i < left.length; i++) if (distanceKm(start, left[i]) < distanceKm(start, left[first])) first = i;
+  const out = left.splice(first, 1);
   while (left.length) {
     const last = out[out.length - 1];
     let best = 0;
@@ -1449,11 +1455,11 @@ export function nearbyPlaces(partners, stops, { maxKm = 1.5, limit = 8, freshDay
     .slice(0, limit);
 }
 
-// Google Maps directions from where you are through the stops, in this order (Google takes up to
-// 9 stops before the last one).
-export function directionsUrl(stops) {
+// Google Maps directions through the stops, in this order – from `origin` (an address, e.g. the
+// office) or else from where you are. Google takes up to 9 stops before the last one.
+export function directionsUrl(stops, origin = null) {
   const at = (p) => encodeURIComponent([p.name, p.address, 'Iceland'].filter(Boolean).join(', '));
   if (!stops.length) return null;
   const before = stops.slice(0, -1).slice(0, 9);
-  return `https://www.google.com/maps/dir/?api=1&destination=${at(stops[stops.length - 1])}${before.length ? `&waypoints=${before.map(at).join('%7C')}` : ''}`;
+  return `https://www.google.com/maps/dir/?api=1${origin ? `&origin=${encodeURIComponent(`${origin}, Iceland`)}` : ''}&destination=${at(stops[stops.length - 1])}${before.length ? `&waypoints=${before.map(at).join('%7C')}` : ''}`;
 }

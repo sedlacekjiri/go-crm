@@ -3,7 +3,7 @@
 // Pins come from Google Places (/api/geocode); the map itself is Leaflet with OpenStreetMap tiles
 // (darkened with a CSS filter in dark mode).
 import { pageHeader } from '../components.js';
-import { directionsUrl, distanceKm, distanceText, FLYERS, flyerKey, hasPin, nearbyPlaces, nextPlannedVisit, PARTNER_TYPES, routeKm, routeOrder, shiftDate, STAGES, today, typeLabel, visitStats } from '../lib.js';
+import { directionsUrl, distanceKm, distanceText, FLYERS, flyerKey, hasPin, nearbyPlaces, nextPlannedVisit, OFFICE, PARTNER_TYPES, routeKm, routeOrder, shiftDate, STAGES, today, typeLabel, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { esc, options, shortDate, storage, toast } from '../util.js';
 
@@ -26,6 +26,18 @@ function loadLeaflet() {
   });
   return leafletReady;
 }
+
+// The office pin: looked up once (Google, via /api/geocode) and kept on this device.
+let office = (() => {
+  try {
+    const o = JSON.parse(storage.get('go-crm-office', 'null'));
+    return o?.address === OFFICE.address ? o : null;
+  } catch {
+    return null;
+  }
+})();
+const OFFICE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6" fill="currentColor"/><circle cx="16" cy="17" r="1.6" fill="currentColor"/></svg>';
 
 const STAGE_COLOR = { new: '--text-3', contacted: '--car', in_talks: '--warn', accepted: '--good', declined: '--bad', on_hold: '--warn' };
 const RECENT_DAYS = 14;
@@ -104,7 +116,7 @@ export async function render(page, { query, refresh, isCurrent }) {
     const planned = plannedOn(trip.date);
     const ids = new Set(planned.map((p) => p.id));
     const all = [...planned, ...trip.ids.filter((id) => !ids.has(id)).map((id) => byId.get(id))];
-    return { planned: ids, route: routeOrder(all), unpinned: all.filter((p) => !hasPin(p)) };
+    return { planned: ids, route: routeOrder(all, office), unpinned: all.filter((p) => !hasPin(p)) };
   };
   const shown = (p) => hasPin(p) && (!view.type || p.type === view.type) && view.stages.has(p.stage);
 
@@ -125,6 +137,12 @@ export async function render(page, { query, refresh, isCurrent }) {
   const drawMarkers = () => {
     layer.clearLayers();
     markers.clear();
+    if (office) {
+      L.marker([office.lat, office.lng], { icon: L.divIcon({ className: 'office-pin', html: `<span>${OFFICE_ICON}</span>`, iconSize: [36, 44], iconAnchor: [18, 42], popupAnchor: [0, -38] }), zIndexOffset: 2000 })
+        .bindPopup(`<div class="map-pop"><b>Go Car Rentals · Go Campers</b><div class="muted small">Our office · ${esc(OFFICE.address)}</div><div class="small">Trips start here.</div></div>`)
+        .bindTooltip('Our office', { direction: 'top', offset: [0, -38] })
+        .addTo(layer);
+    }
     const { route } = stops();
     const order = new Map(route.map((p, i) => [p.id, i + 1]));
     const near = new Set(nearbyPlaces(state.partners, route, { visits, day: trip.date, freshDays: RECENT_DAYS }).map((x) => x.partner.id));
@@ -153,7 +171,8 @@ export async function render(page, { query, refresh, isCurrent }) {
     const { route, planned, unpinned } = stops();
     const fresh = trip.ids.filter((id) => !planned.has(id));
     const near = nearbyPlaces(state.partners, route, { visits, day: trip.date, freshDays: RECENT_DAYS });
-    const url = directionsUrl(route);
+    const url = directionsUrl(route, office ? OFFICE.address : null);
+    const legs = office ? [office, ...route] : route;
     page.querySelector('[data-trip]').innerHTML = `
       <div class="card-head"><h2>Trip</h2>${trip.ids.length ? '<button class="link-btn muted" data-trip-clear>Clear</button>' : ''}</div>
       <div class="form-grid">
@@ -165,11 +184,11 @@ export async function render(page, { query, refresh, isCurrent }) {
           ? `<ol class="trip-stops">${route
               .map(
                 (p, i) => `<li><span class="n" style="background:${color(p.stage)}">${i + 1}</span>
-                  <span class="body"><a href="#/partner/${p.id}">${esc(p.name)}</a><small class="muted">${i ? `${distanceText(distanceKm(route[i - 1], p))} from ${i}` : 'Start'}${planned.has(p.id) ? ' · already planned' : ''}</small></span>
+                  <span class="body"><a href="#/partner/${p.id}">${esc(p.name)}</a><small class="muted">${i ? `${distanceText(distanceKm(route[i - 1], p))} from ${i}` : office ? `${distanceText(distanceKm(office, p))} from the office` : 'Start'}${planned.has(p.id) ? ' · already planned' : ''}</small></span>
                   ${planned.has(p.id) ? '' : `<button class="icon-btn sm" data-trip-remove="${p.id}" aria-label="Remove ${esc(p.name)}">✕</button>`}</li>`
               )
               .join('')}</ol>
-            ${route.length > 1 ? `<p class="muted small">About ${distanceText(routeKm(route))} between the stops (straight line).</p>` : ''}`
+            ${legs.length > 1 ? `<p class="muted small">About ${distanceText(routeKm(legs))} ${office ? 'from the office' : 'between the stops'} (straight line).</p>` : ''}`
           : `<p class="empty">Click places on the map and choose <b>Add to trip</b>. Places close by are then suggested here.${plannedOn(trip.date).length ? '' : ' Visits already planned for the day show up too.'}</p>`
       }
       ${unpinned.length ? `<p class="muted small">Not on the map: ${esc(unpinned.map((p) => p.name).join(', '))}</p>` : ''}
@@ -218,11 +237,20 @@ export async function render(page, { query, refresh, isCurrent }) {
   };
 
   redraw();
+  if (!office) {
+    api('/api/geocode')
+      .then((o) => {
+        office = { ...o, address: OFFICE.address };
+        storage.set('go-crm-office', JSON.stringify(office));
+        if (isCurrent()) redraw();
+      })
+      .catch(() => {});
+  }
   const startAt = query.get('focus');
   if (startAt && hasPin(byId.get(startAt))) focus(startAt);
   else {
     const { route } = stops();
-    const fit = route.length ? route : pinned.filter(shown);
+    const fit = route.length ? [office, ...route].filter(Boolean) : pinned.filter(shown);
     if (fit.length > 1) map.fitBounds(fit.map((p) => [p.lat, p.lng]), { padding: [30, 30], maxZoom: 15 });
     else if (fit.length) map.setView([fit[0].lat, fit[0].lng], 15);
   }

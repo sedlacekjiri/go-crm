@@ -1365,6 +1365,8 @@ dl.details .maps-go { display: inline-block; margin-left: 8px; font-size: 12px; 
 .map-pop .acts .btn { color: inherit; }
 .map-pop .acts .btn:not(.secondary) { color: #fff; }
 .trip-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.office-pin span { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.office-pin svg { width: 19px; height: 19px; color: #fff; transform: rotate(45deg); }
 .chips .dot, .trip-near .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .trip { position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow: auto; }
 .trip-stops, .trip-near, .trip-missing ul { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 8px; }

@@ -553,6 +553,10 @@ describe('map trips', async () => {
     assert.deepEqual(routeOrder([church, keflavik, nearHarpa, harpa, noPin]).map((s) => s.id), ['a', 'c', 'b', 'd']);
     assert.ok(routeKm([church, harpa]) > 0.9);
     assert.deepEqual(routeOrder([]), []);
+    // From the office in Skógarhlíð the church is nearer than Harpa, so the route starts there.
+    const office = { lat: 64.1370, lng: -21.9160 };
+    assert.deepEqual(routeOrder([harpa, church], office).map((s) => s.id), ['a', 'b']);
+    assert.deepEqual(routeOrder([harpa, church]).map((s) => s.id), ['b', 'a']);
   });
   it('suggests nearby places, skipping declined, far and freshly visited ones', () => {
     const all = [church, harpa, nearHarpa, keflavik, declined, noPin];
@@ -566,5 +570,6 @@ describe('map trips', async () => {
     assert.ok(url.includes('destination=KEX%2C%20Iceland'));
     assert.ok(url.includes('waypoints=Hotel%20Borg%2C%20P%C3%B3sth%C3%BAsstr%C3%A6ti%2011%2C%20Iceland'));
     assert.equal(directionsUrl([]), null);
+    assert.ok(directionsUrl([{ name: 'KEX' }], 'Skógarhlíð 16, 105 Reykjavík').includes('origin=Sk%C3%B3garhl%C3%AD%C3%B0%2016%2C%20105%20Reykjav%C3%ADk%2C%20Iceland'));
   });
 });

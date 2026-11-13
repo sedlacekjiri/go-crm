@@ -13,6 +13,18 @@ const inIceland = (lat, lng) => lat > 63 && lat < 67 && lng > -25 && lng < -13;
 // "101 Miðborg (Downtown)" → "101 Miðborg"
 export const placeQuery = (p) => [p.name, p.address || p.area?.replace(/\s*\(.*\)$/, ''), 'Iceland'].filter(Boolean).join(', ');
 
+// GET → where our office is (the start of every trip); the page keeps it, so this runs rarely.
+export const OFFICE_ADDRESS = 'Skógarhlíð 16, 105 Reykjavík, Iceland';
+export async function onRequestGet({ request, env }) {
+  const auth = await authorize(request, env, { section: 'sales' });
+  if (auth instanceof Response) return auth;
+  if (!env.GOOGLE_PLACES_API_KEY) return bad('Google Places is not set up (GOOGLE_PLACES_API_KEY)', 501);
+  const at = await locatePlace(env.GOOGLE_PLACES_API_KEY, OFFICE_ADDRESS).catch((e) => e);
+  if (at instanceof Error) return bad(at.message, 502);
+  if (!at) return bad('Office address not found', 404);
+  return json({ lat: at.lat, lng: at.lng, address: at.address });
+}
+
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true, section: 'sales' });
   if (auth instanceof Response) return auth;
