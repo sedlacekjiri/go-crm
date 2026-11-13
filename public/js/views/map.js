@@ -89,8 +89,10 @@ export async function render(page, { query, refresh, isCurrent }) {
   box.innerHTML = '';
   const map = L.map(box, { zoomControl: true }).setView([64.1466, -21.9426], 13);
   box.classList.toggle('dark', dark);
+  // OpenStreetMap needs to know which site asks for tiles (our pages send no referrer by default).
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    referrerPolicy: 'strict-origin-when-cross-origin',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   const layer = L.layerGroup().addTo(map);
