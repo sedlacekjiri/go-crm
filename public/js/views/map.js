@@ -5,7 +5,7 @@
 import { pageHeader } from '../components.js';
 import { directionsUrl, distanceKm, distanceText, FLYERS, flyerKey, hasPin, nearbyPlaces, nextPlannedVisit, OFFICE, PARTNER_TYPES, routeKm, routeOrder, shiftDate, STAGES, today, typeLabel, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
-import { esc, options, shortDate, storage, toast } from '../util.js';
+import { esc, shortDate, storage, toast } from '../util.js';
 
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4';
 let leafletReady = null;
@@ -39,6 +39,19 @@ let office = (() => {
 const OFFICE_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-5l-2-5H7l-2 5z"/><path d="M5 12h14"/><circle cx="8" cy="17" r="1.6" fill="currentColor"/><circle cx="16" cy="17" r="1.6" fill="currentColor"/></svg>';
 
+// One small icon per partner type, drawn white inside the stage-coloured pin.
+const TYPE_PATHS = {
+  hotel: '<path d="M3 19V6M3 15h18v4M21 15v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11.5" r="1.8"/>',
+  guesthouse: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/>',
+  hostel: '<path d="M6 10a6 6 0 0 1 12 0v10H6z"/><path d="M9.5 5.5V3h5v2.5M9 14h6v6H9z"/>',
+  campsite: '<path d="M2 20h20M4.5 20 12 6l7.5 14M12 20l-3.5-6M12 20l3.5-6"/>',
+  ota: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  cafe: '<path d="M4 9h13v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8.5 3v3M12.5 3v3"/>',
+  other: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+};
+export const typeIcon = (type) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${TYPE_PATHS[type] ?? TYPE_PATHS.other}</svg>`;
+
 const STAGE_COLOR = { new: '--text-3', contacted: '--car', in_talks: '--warn', accepted: '--good', declined: '--bad', on_hold: '--warn' };
 const RECENT_DAYS = 14;
 
@@ -71,11 +84,9 @@ export async function render(page, { query, refresh, isCurrent }) {
       admin && missing.length ? `<button class="btn secondary" data-locate>Find ${missing.length} on the map</button>` : ''
     )}
     <div class="filters">
-      <select class="input" data-type aria-label="Type">${options(
-        PARTNER_TYPES.filter((t) => state.partners.some((p) => p.type === t.value)).map((t) => ({ value: t.value, label: t.label })),
-        view.type,
-        { empty: 'All types' }
-      )}</select>
+      <div class="chips wrap-chips type-chips" data-types>${[{ value: '', label: 'All types' }, ...PARTNER_TYPES.filter((t) => state.partners.some((p) => p.type === t.value))]
+        .map((t) => `<button type="button" data-t="${t.value}" aria-pressed="${view.type === t.value}">${t.value ? `<i class="type-ico">${typeIcon(t.value)}</i>` : ''}${t.label}</button>`)
+        .join('')}</div>
       <div class="chips wrap-chips" data-stages>${STAGES.map(
         (s) => `<button type="button" data-s="${s.value}" aria-pressed="${view.stages.has(s.value)}"><i class="dot" style="background:var(${STAGE_COLOR[s.value]})"></i>${s.label}</button>`
       ).join('')}</div>
@@ -151,17 +162,16 @@ export async function render(page, { query, refresh, isCurrent }) {
       const n = order.get(p.id);
       const m = n
         ? L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'trip-pin', html: `<span style="background:${color(p.stage)}">${n}</span>`, iconSize: [26, 26] }), zIndexOffset: 1000 })
-        : L.circleMarker([p.lat, p.lng], {
-            radius: near.has(p.id) ? 9 : 7,
-            color: near.has(p.id) ? css.getPropertyValue('--accent').trim() : dark ? '#111' : '#fff',
-            weight: near.has(p.id) ? 3 : 2,
-            dashArray: near.has(p.id) ? '3 3' : null,
-            fillColor: p.stage === 'on_hold' ? (dark ? '#111' : '#fff') : color(p.stage),
-            fillOpacity: 1,
+        : L.marker([p.lat, p.lng], {
+            icon: L.divIcon({
+              className: 'type-pin-wrap',
+              html: `<span class="type-pin${near.has(p.id) ? ' near' : ''}${p.stage === 'on_hold' ? ' hold' : ''}" style="--c:${color(p.stage)}">${typeIcon(p.type)}</span>`,
+              iconSize: [26, 26],
+            }),
+            zIndexOffset: near.has(p.id) ? 500 : 0,
           });
-      if (!n && p.stage === 'on_hold') m.setStyle({ color: color('on_hold'), weight: 3 });
-      m.bindPopup(() => popup(p), { minWidth: 220 });
-      m.bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] });
+      m.bindPopup(() => popup(p), { minWidth: 220, offset: [0, -8] });
+      m.bindTooltip(esc(p.name), { direction: 'top', offset: [0, -14] });
       m.addTo(layer);
       markers.set(p.id, m);
     }
@@ -269,8 +279,11 @@ export async function render(page, { query, refresh, isCurrent }) {
     }
   });
 
-  page.querySelector('[data-type]').onchange = (e) => {
-    view.type = e.target.value;
+  page.querySelector('[data-types]').onclick = (e) => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    view.type = b.dataset.t;
+    page.querySelectorAll('[data-types] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     save();
     drawMarkers();
   };
