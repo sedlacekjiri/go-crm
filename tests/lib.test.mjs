@@ -524,3 +524,11 @@ describe('Repeating posts', () => {
     assert.deepEqual(repeatDates('2026-11-13', 'week', '2026-11-13'), []);
   });
 });
+
+it('activityTitle: type plus our own activities', async () => {
+  const { activityTitle } = await import('../public/js/lib.js');
+  assert.equal(activityTitle({ type: 'visit', tags: ['A4 flyers left', 'Staff training'] }), 'Visit · A4 flyers left · Staff training');
+  assert.equal(activityTitle({ type: 'other', tags: ['Staff training'] }), 'Staff training');
+  assert.equal(activityTitle({ type: 'call' }), 'Call');
+  assert.equal(activityTitle({ type: 'other', tags: [] }), 'Activity');
+});

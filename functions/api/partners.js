@@ -9,7 +9,7 @@ import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '.
 import { savePartner, TYPES } from '../_lib/partners.js';
 import { addContactTo } from '../_lib/contacts.js';
 
-const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent', 'welcome_reply', 'declined_reason'];
+const BULK_FIELDS = ['stage', 'interest', 'next_follow_up', 'welcome_sent', 'welcome_reply', 'declined_reason', 'flyers_a4', 'flyers_a5'];
 
 async function bulkUpdate(env, body) {
   const ids = [...new Set(body.ids.map((id) => str(id, 64)).filter(Boolean))].slice(0, 500);

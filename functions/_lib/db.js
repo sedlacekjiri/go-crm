@@ -222,6 +222,13 @@ const SCHEMA = [
     created_at TEXT NOT NULL
   )`,
   `CREATE INDEX IF NOT EXISTS activities_partner ON activities (partner_id, happened_at)`,
+  // Our own activity types (e.g. "Staff training", "Brochure restock"), next to the built-in ones.
+  `CREATE TABLE IF NOT EXISTS activity_types (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS activity_types_label ON activity_types (lower(label))`,
   `CREATE TABLE IF NOT EXISTS sales (
     booking_ref TEXT PRIMARY KEY,
     booking_date TEXT NOT NULL,
@@ -525,6 +532,9 @@ const MIGRATIONS = [
   `ALTER TABLE tasks ADD COLUMN followers TEXT`, // JSON ids: people @mentioned in its comments see the task
   `ALTER TABLE partners ADD COLUMN welcome_sent TEXT`, // date the welcome / intro e-mail went out
   `ALTER TABLE partners ADD COLUMN welcome_reply TEXT`, // date they replied to it
+  `ALTER TABLE partners ADD COLUMN flyers_a4 TEXT`, // date our A4 flyers were last left there
+  `ALTER TABLE partners ADD COLUMN flyers_a5 TEXT`, // same for A5
+  `ALTER TABLE activities ADD COLUMN tags TEXT`, // JSON labels of our own activity types done with it
 ];
 
 let schemaReady = false;

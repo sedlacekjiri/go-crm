@@ -30,7 +30,6 @@ export const OPEN_STAGES = ['new', 'contacted', 'in_talks', 'on_hold'];
 export const VISIT_OUTCOMES = [
   'Met the manager',
   'Talked to reception',
-  'Left flyers',
   'Placed QR stand',
   'Manager not in – come back',
   'Wants commission terms',
@@ -64,6 +63,9 @@ export const ACTIVITY_TYPES = [
   { value: 'followup', label: 'Follow-up e-mail' },
   { value: 'note', label: 'Note' },
 ];
+// Our flyers, left at reception (partners.flyers_a4 / flyers_a5 = the date).
+export const FLYERS = ['A4', 'A5'];
+export const flyerKey = (size) => `flyers_${size.toLowerCase()}`;
 
 // Reykjavík first, then the rest of the capital region.
 export const AREAS = [
@@ -233,6 +235,8 @@ export const hasStars = (t) => !!find(PARTNER_TYPES, t)?.stars;
 export const capacityText = (p) => (p.rooms && capacityOf(p.type) ? `${p.rooms} ${capacityOf(p.type)}` : null);
 export const interestLabel = (i) => find(INTEREST, i)?.label ?? '–';
 export const activityLabel = (t) => find(ACTIVITY_TYPES, t)?.label ?? t;
+// What a logged activity was: its type plus our own activity types done with it ('other' = only those).
+export const activityTitle = (a) => [a.type === 'other' ? null : activityLabel(a.type), ...(a.tags ?? [])].filter(Boolean).join(' · ') || 'Activity';
 export const brandLabel = (b) => find(BRANDS, b)?.label ?? 'Unknown';
 
 // ── Dates ──────────────────────────────────────────────────────

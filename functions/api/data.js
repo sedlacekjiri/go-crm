@@ -14,7 +14,7 @@ export async function onRequestGet({ request, env }) {
   const sales = auth.has('sales');
   const marketing = auth.has('marketing');
   const none = db.prepare('SELECT 1 WHERE 0');
-  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes, files, folders, events] = await db.batch([
+  const [partners, contacts, activities, tasks, posts, affiliates, payouts, notes, collaborators, goals, salesInfo, users, social, reportNotes, files, folders, events, activityTypes] = await db.batch([
     sales ? db.prepare('SELECT * FROM partners ORDER BY name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM contacts ORDER BY is_primary DESC, name COLLATE NOCASE') : none,
     sales ? db.prepare('SELECT * FROM activities ORDER BY happened_at DESC') : none,
@@ -33,6 +33,7 @@ export async function onRequestGet({ request, env }) {
     db.prepare('SELECT id, parent_type, parent_id, folder_id, name, type, size, created_by, created_at FROM files ORDER BY created_at'),
     marketing ? db.prepare('SELECT * FROM folders ORDER BY name COLLATE NOCASE') : none,
     db.prepare(`SELECT * FROM events WHERE COALESCE(end_date, date) >= date('now', '-120 days') ORDER BY date, start_time`),
+    sales ? db.prepare('SELECT * FROM activity_types ORDER BY label COLLATE NOCASE') : none,
   ]);
   const visibleTasks = tasks.results.filter((t) => canSeeTask(t, auth));
   const taskIds = new Set(visibleTasks.map((t) => t.id));
@@ -47,7 +48,8 @@ export async function onRequestGet({ request, env }) {
     }),
     partners: partners.results,
     contacts: contacts.results.map((c) => ({ ...c, is_primary: !!c.is_primary })),
-    activities: activities.results,
+    activities: activities.results.map((a) => ({ ...a, tags: parseList(a.tags) })),
+    activityTypes: activityTypes.results,
     tasks: visibleTasks.map((t) => ({ ...t, done: !!t.done, subtasks: parseSubtasks(t.subtasks), followers: parseList(t.followers) })),
     posts: posts.results.map((p) => ({ ...p, channels: p.channels ? p.channels.split(',') : [], subtasks: parseSubtasks(p.subtasks) })),
     affiliates: affiliates.results,

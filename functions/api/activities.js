@@ -1,13 +1,14 @@
 // /api/activities (admin only) — the visit / call / e-mail log.
-//   POST   { partner_id, type, happened_at, contact_id, summary, partner: { stage, next_follow_up } }
+//   POST   { partner_id, type, happened_at, contact_id, summary, tags, partner: { stage, next_follow_up, flyers_a4, flyers_a5 } }
+//          `tags`: labels of our own activity types done with it (type 'other' = only those).
 //          `partner` is optional: logging a visit can move the partner on and set the next follow-up.
 //   PATCH  { id, happened_at }   correct when it happened
 //   DELETE ?id=…
 
-import { authorize, bad, isDate, json, now, oneOf, readJson, str, uuid } from '../_lib/db.js';
+import { authorize, bad, isDate, json, now, oneOf, parseList, readJson, str, uuid } from '../_lib/db.js';
 import { savePartner } from '../_lib/partners.js';
 
-const TYPES = ['visit', 'meeting', 'call', 'email', 'followup', 'note'];
+const TYPES = ['visit', 'meeting', 'call', 'email', 'followup', 'note', 'other'];
 
 export async function onRequestPost({ request, env }) {
   const auth = await authorize(request, env, { write: true, section: 'sales' });
@@ -28,10 +29,12 @@ export async function onRequestPost({ request, env }) {
     summary: str(b.summary, 5000),
     created_at: now(),
   };
+  const tags = [...new Set(parseList(b.tags).map((t) => str(t, 80)).filter(Boolean))].slice(0, 20);
+  row.tags = tags.length ? JSON.stringify(tags) : null;
   const statements = [
     env.DB.prepare(
-      `INSERT INTO activities (id, partner_id, contact_id, type, happened_at, summary, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind(row.id, row.partner_id, row.contact_id, row.type, row.happened_at, row.summary, row.created_at),
+      `INSERT INTO activities (id, partner_id, contact_id, type, happened_at, summary, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(row.id, row.partner_id, row.contact_id, row.type, row.happened_at, row.summary, row.tags, row.created_at),
   ];
   // A visit ticks off the planned visit(s) for this partner up to that day (the page sends its local date).
   if (row.type === 'visit' || row.type === 'meeting') {
@@ -49,13 +52,13 @@ export async function onRequestPost({ request, env }) {
   if (b.partner && typeof b.partner === 'object') {
     const patch = {};
     if ('stage' in b.partner) patch.stage = b.partner.stage;
-    if ('next_follow_up' in b.partner) patch.next_follow_up = b.partner.next_follow_up;
+    for (const k of ['next_follow_up', 'flyers_a4', 'flyers_a5']) if (k in b.partner) patch[k] = b.partner[k];
     if (Object.keys(patch).length) {
-      const result = await savePartner(env.DB, { id: partner.id, ...patch }, { visitLogged: row.type === 'visit' || row.type === 'meeting' });
+      const result = await savePartner(env.DB, { id: partner.id, ...patch }, { visitLogged: row.type === 'visit' || row.type === 'meeting', flyersLogged: true });
       if (result.error) return bad(result.error, result.status);
     }
   }
-  return json(row);
+  return json({ ...row, tags });
 }
 
 export async function onRequestPatch({ request, env }) {

@@ -1,12 +1,12 @@
 // Partner list with type tabs (or all types at once), search, area / stage filters and bulk add.
 import { emptyBox, followUpPill, interestBadge, pageHeader, stageBadge } from '../components.js';
-import { AREAS, capacityText, chainCounts, chainSuggestions, INTEREST, PARTNER_TYPES, STAGES, today, typeLabel, visitStats } from '../lib.js';
+import { AREAS, capacityText, chainCounts, chainSuggestions, FLYERS, flyerKey, INTEREST, PARTNER_TYPES, STAGES, today, typeLabel, visitStats } from '../lib.js';
 import { api, isAdmin, state } from '../store.js';
 import { renderOverview } from './affiliates.js';
 import { esc, formData, openModal, options, shortDate, toast } from '../util.js';
 
 // Filters survive navigating to a partner and back.
-const filters = { query: '', stage: '', area: '', chain: '', welcome: '', sort: 'name' };
+const filters = { query: '', stage: '', area: '', chain: '', welcome: '', flyers: '', sort: 'name' };
 // Select mode: tick several partners and change them at once.
 let selecting = false;
 const selected = new Set();
@@ -15,6 +15,7 @@ export function render(page, { query, refresh, isCurrent }) {
   const isAffiliates = query.get('type') === 'affiliates';
   // Home links straight to e.g. “no welcome e-mail yet”.
   if (query.has('welcome')) filters.welcome = query.get('welcome');
+  if (query.has('flyers')) filters.flyers = query.get('flyers');
   const all = query.get('type') === 'all';
   const type = PARTNER_TYPES.some((t) => t.value === query.get('type')) ? query.get('type') : 'hotel';
   const typeInfo = PARTNER_TYPES.find((t) => t.value === type);
@@ -64,6 +65,15 @@ export function render(page, { query, refresh, isCurrent }) {
         filters.welcome,
         { empty: 'Welcome e-mail: any' }
       )}</select>
+      <select class="input" data-f="flyers" aria-label="Flyers">${options(
+        [
+          { value: 'any', label: 'Has our flyers' },
+          ...FLYERS.map((size) => ({ value: size, label: `Has ${size} flyers` })),
+          { value: 'none', label: 'No flyers yet' },
+        ],
+        filters.flyers,
+        { empty: 'Flyers: any' }
+      )}</select>
       <select class="input" data-f="sort" aria-label="Sort">${options(
         [
           { value: 'name', label: 'Sort: Name' },
@@ -94,6 +104,7 @@ export function render(page, { query, refresh, isCurrent }) {
         (!filters.area || p.area === filters.area) &&
         (!filters.chain || (filters.chain === '__none' ? !p.chain : p.chain === filters.chain)) &&
         (!filters.welcome || (filters.welcome === 'sent') === !!p.welcome_sent) &&
+        (!filters.flyers || hasFlyers(p, filters.flyers)) &&
         (!q || [p.name, p.chain, p.address, p.affiliate_code, p.notes].some((v) => v && v.toLowerCase().includes(q)))
     );
     const cmp = {
@@ -120,7 +131,7 @@ export function render(page, { query, refresh, isCurrent }) {
             const meta = [all ? typeLabel(p.type) : null, p.area, capacityText(p), v ? `${v.count}× visited, last ${shortDate(v.last)}` : 'not visited yet'].filter(Boolean).join(' · ');
             return `<a class="prow${selecting ? ' selecting' : ''}${selected.has(p.id) ? ' on' : ''}" href="#/partner/${p.id}" data-pid="${p.id}">
               ${selecting ? '<span class="pick" aria-hidden="true"></span>' : ''}<div class="main"><div class="name"><span>${esc(p.name)}</span>${p.chain ? `<em class="chain-tag">${esc(p.chain)}</em>` : ''}${p.stars ? `<em class="stars">${'★'.repeat(p.stars)}</em>` : ''}</div><div class="meta">${esc(meta)}</div></div>
-              <div class="tags">${p.welcome_sent ? `<span class="pill good" title="Welcome e-mail sent ${shortDate(p.welcome_sent)}">✉️ ${shortDate(p.welcome_sent)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${
+              <div class="tags">${FLYERS.some((size) => p[flyerKey(size)]) ? `<span class="pill" title="${esc(FLYERS.filter((size) => p[flyerKey(size)]).map((size) => `${size} flyers left ${shortDate(p[flyerKey(size)])}`).join(', '))}">📄 ${FLYERS.filter((size) => p[flyerKey(size)]).join('+')}</span>` : ''}${p.welcome_sent ? `<span class="pill good" title="Welcome e-mail sent ${shortDate(p.welcome_sent)}">✉️ ${shortDate(p.welcome_sent)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${
                 p.stage === 'accepted' ? (p.affiliate_code ? `<span class="code">${esc(p.affiliate_code)}</span>` : '') : p.stage !== 'declined' ? followUpPill(p.next_follow_up) : ''
               }</div></a>`;
           })
@@ -182,8 +193,11 @@ export function render(page, { query, refresh, isCurrent }) {
   page.querySelector('[data-bulk]')?.addEventListener('click', () => bulkAdd(type, refresh));
 }
 
+// Flyers filter: 'any', 'none' or one size.
+const hasFlyers = (p, f) => (f === 'none' ? !FLYERS.some((size) => p[flyerKey(size)]) : f === 'any' ? FLYERS.some((size) => p[flyerKey(size)]) : !!p[flyerKey(f)]);
+
 // One window for many partners: stage (with the visit date), a note for their history, interest,
-// follow-up, welcome e-mail. Empty fields stay as they are.
+// follow-up, welcome e-mail, flyers. Empty fields stay as they are.
 function bulkEdit(list, done) {
   const toVisit = list.filter((p) => p.stage === 'new').length;
   const m = openModal(
@@ -205,6 +219,7 @@ function bulkEdit(list, done) {
         <label class="field"><span>Welcome e-mail sent on</span><input class="input" type="date" name="welcome_sent" max="${today()}" /></label>
         <label class="field"><span>Follow-up e-mail sent on</span><input class="input" type="date" name="followup_mail" max="${today()}" /></label>
         <label class="field"><span>Replied to welcome e-mail on</span><input class="input" type="date" name="welcome_reply" max="${today()}" /></label>
+        ${FLYERS.map((size) => `<label class="field"><span>${size} flyers left on</span><input class="input" type="date" name="${flyerKey(size)}" max="${today()}" /></label>`).join('')}
       </div>
       <fieldset class="also-add"><legend>Add a contact person to all (optional)</legend>
         <div class="form-grid">
@@ -244,11 +259,12 @@ function bulkEdit(list, done) {
     if (f.next_follow_up) set.next_follow_up = f.next_follow_up;
     if (f.welcome_sent) set.welcome_sent = f.welcome_sent;
     if (f.welcome_reply) set.welcome_reply = f.welcome_reply;
+    for (const size of FLYERS) if (f[flyerKey(size)]) set[flyerKey(size)] = f[flyerKey(size)];
     if (['on_hold', 'declined'].includes(f.stage) && f.declined_reason.trim()) set.declined_reason = f.declined_reason;
     const contact = f.c_name.trim() ? { name: f.c_name, role: f.c_role, phone: f.c_phone, email: f.c_email } : null;
     if ((f.c_role || f.c_phone || f.c_email) && !contact) return toast('Add the contact person’s name', 'error');
     if (!Object.keys(set).length && !f.note.trim() && !contact && !f.followup_mail) return toast('Nothing to change', 'error');
-    if (f.day > today() || f.followup_mail > today() || f.welcome_reply > today()) return toast('Pick a day up to today', 'error');
+    if ([f.day, f.followup_mail, f.welcome_reply, ...FLYERS.map((size) => f[flyerKey(size)])].some((d) => d > today())) return toast('Pick a day up to today', 'error');
     try {
       const { updated } = await api('/api/partners', { method: 'POST', body: { ids: list.map((p) => p.id), set, visited_on: f.day || null, note: f.note, contact, followup_mail: f.followup_mail || null } });
       m.close();

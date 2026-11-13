@@ -23,13 +23,16 @@ const FIELDS = {
   next_follow_up: (v) => (isDate(v) ? v : null),
   welcome_sent: (v) => (isDate(v) ? v : null),
   welcome_reply: (v) => (isDate(v) ? v : null),
+  flyers_a4: (v) => (isDate(v) ? v : null),
+  flyers_a5: (v) => (isDate(v) ? v : null),
   declined_reason: (v) => str(v, 500),
   notes: (v) => str(v, 5000),
 };
 
 // Applies the allowed fields from body onto a partner row (used by activities.js too).
 // options.visitLogged: the caller has just logged the visit itself (activities.js).
-export async function savePartner(db, body, { visitLogged = false } = {}) {
+// options.flyersLogged: the caller's own activity already says flyers were left.
+export async function savePartner(db, body, { visitLogged = false, flyersLogged = false } = {}) {
   const existing = body.id ? await db.prepare('SELECT * FROM partners WHERE id = ?').bind(body.id).first() : null;
   if (body.id && !existing) return { error: 'Partner not found', status: 404 };
   const row = existing ? { ...existing } : { id: uuid(), created_at: now(), stage: 'new', type: 'hotel' };
@@ -63,6 +66,19 @@ export async function savePartner(db, body, { visitLogged = false } = {}) {
   if (row.stage === 'on_hold' && existing?.stage !== 'on_hold') {
     const summary = ['On hold', row.declined_reason, row.next_follow_up && `talk again ${row.next_follow_up.split('-').reverse().join('.')}`].filter(Boolean).join(' – ');
     await db.prepare(`INSERT INTO activities (id, partner_id, type, happened_at, summary, created_at) VALUES (?, ?, 'note', ?, ?, ?)`).bind(uuid(), row.id, now(), summary, now()).run();
+  }
+  // Leaving flyers goes into the history too (unless it was logged with an activity).
+  const left = ['A4', 'A5'].filter((size) => {
+    const day = row[`flyers_${size.toLowerCase()}`];
+    return day && day !== existing?.[`flyers_${size.toLowerCase()}`];
+  });
+  if (left.length && !flyersLogged) {
+    const day = row[`flyers_${left[0].toLowerCase()}`];
+    const at = day === now().slice(0, 10) ? now() : `${day}T12:00:00.000Z`;
+    await db
+      .prepare(`INSERT INTO activities (id, partner_id, type, happened_at, tags, created_at) VALUES (?, ?, 'other', ?, ?, ?)`)
+      .bind(uuid(), row.id, at, JSON.stringify(left.map((size) => `${size} flyers left`)), now())
+      .run();
   }
   return { partner: row };
 }

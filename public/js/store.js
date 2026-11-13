@@ -70,6 +70,7 @@ export const state = {
   partners: [],
   contacts: [],
   activities: [],
+  activityTypes: [],
   tasks: [],
   posts: [],
   affiliates: [],

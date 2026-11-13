@@ -2,7 +2,7 @@
 import { revenueChart } from '../chart.js';
 import { assigneeAvatar, avatar, followUpPill, kpi, miniKpi, stageBadge } from '../components.js';
 import {
-  activityLabel,
+  activityTitle,
   actuals,
   agenda,
   eventTimeText,
@@ -184,11 +184,11 @@ export async function render(page, { isCurrent }) {
                 const p = byId.get(a.partner_id);
                 return `<tr class="clickable" data-href="#/partner/${a.partner_id}">
                   <td class="nowrap muted">${dateTime(a.happened_at)}</td>
-                  <td><b>${esc(activityLabel(a.type))}</b> · ${esc(p?.name ?? '–')}${a.summary ? `<span class="muted"> – ${esc(a.summary.length > 110 ? `${a.summary.slice(0, 110)}…` : a.summary)}</span>` : ''}</td>
+                  <td><b>${esc(activityTitle(a))}</b> · ${esc(p?.name ?? '–')}${a.summary ? `<span class="muted"> – ${esc(a.summary.length > 110 ? `${a.summary.slice(0, 110)}…` : a.summary)}</span>` : ''}</td>
                   <td class="r opt">${p ? stageBadge(p.stage) : ''}</td></tr>`;
               })
               .join('')}</tbody></table></div>`
-          : '<p class="empty">No visits logged yet. Open a partner and tap “Log visit” after each visit.</p>'
+          : '<p class="empty">No visits logged yet. Open a partner and tap “Log activity” after each visit.</p>'
       }
     </section>`;
 

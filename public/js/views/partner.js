@@ -1,6 +1,6 @@
 // One partner: pipeline controls, quick visit logging, contacts, activity log, affiliate results.
 import { emptyBox, followUpPill, interestBadge, miniKpi, stageBadge } from '../components.js';
-import { ACTIVITY_TYPES, activityLabel, brandLabel, capacityText, codeKey, INTEREST, mapsUrls, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
+import { ACTIVITY_TYPES, activityTitle, brandLabel, capacityText, codeKey, FLYERS, flyerKey, INTEREST, mapsUrls, nextPlannedVisit, saleValue, shiftDate, STAGES, today, totals, typeLabel, VISIT_OUTCOMES, visitStats } from '../lib.js';
 import { api, currency, isAdmin, loadSales, state } from '../store.js';
 import { affiliateModal, affiliateRows, wireAffiliateRows } from './affiliates.js';
 import { planVisits } from './tasks.js';
@@ -34,11 +34,11 @@ export async function render(page, { params, refresh, isCurrent }) {
     <div class="detail-head">
       <div>
         <h1 class="page-title">${esc(p.name)}</h1>
-        <div class="badges">${p.chain ? `<span class="chain-tag">${esc(p.chain)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${p.welcome_sent ? `<span class="pill good">✉️ Welcome e-mail ${shortDate(p.welcome_sent)}</span>` : ''}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
+        <div class="badges">${p.chain ? `<span class="chain-tag">${esc(p.chain)}</span>` : ''}${stageBadge(p.stage)}${interestBadge(p.interest)}${visits ? `<span class="pill">${visits.count}× visited · last ${shortDate(visits.last)}</span>` : ''}${p.welcome_sent ? `<span class="pill good">✉️ Welcome e-mail ${shortDate(p.welcome_sent)}</span>` : ''}${flyersPill(p)}${planned ? `<a class="pill ${planned < today() ? 'overdue' : planned === today() ? 'today' : ''}" href="#/tasks">📅 Visit planned ${planned === today() ? 'today' : shortDate(planned)}</a>` : ''}
           <span class="muted small">${esc([typeLabel(p.type), p.area, capacityText(p), p.stars ? '★'.repeat(p.stars) : null].filter(Boolean).join(' · '))}</span>
         </div>
       </div>
-      ${admin ? `<div class="controls"><a class="btn secondary" href="#/partner/${p.id}/edit">Edit</a><button class="btn secondary" data-plan-visit>Plan visit</button><button class="btn" data-log>+ Log visit</button></div>` : ''}
+      ${admin ? `<div class="controls"><a class="btn secondary" href="#/partner/${p.id}/edit">Edit</a><button class="btn secondary" data-plan-visit>Plan visit</button><button class="btn" data-log>+ Log activity</button></div>` : ''}
     </div>
 
     <div class="grid grid-side" style="margin-top:0">
@@ -72,6 +72,13 @@ export async function render(page, { params, refresh, isCurrent }) {
                 ${p.welcome_reply ? '<button type="button" data-reply="clear">Clear</button>' : ''}</div></div>`
                 : ''
             }
+            ${FLYERS.map((size) => {
+              const day = p[flyerKey(size)];
+              return `<div class="line"><span class="lbl">${size} flyers</span>${day ? `<span class="pill good">✓ Left ${shortDate(day)}</span>` : '<span class="pill">None there</span>'}
+              <div class="chips"><button type="button" data-flyers="${size}">${day ? 'Restocked today' : 'Left today'}</button>
+                <input class="input welcome-date" type="date" max="${today()}" value="${day ?? ''}" data-flyers-date="${size}" aria-label="Date ${size} flyers were left there" />
+                ${day ? `<button type="button" data-flyers-clear="${size}">None there now</button>` : ''}</div></div>`;
+            }).join('')}
             ${['declined', 'on_hold'].includes(p.stage) && p.declined_reason ? `<p class="muted" style="margin-top:12px">${p.stage === 'on_hold' ? 'On hold' : 'Declined'}: ${esc(p.declined_reason)}</p>` : ''}
           </section>`
             : ''
@@ -84,12 +91,12 @@ export async function render(page, { params, refresh, isCurrent }) {
               ? `<ol class="timeline">${activities
                   .map((a) => {
                     const who = contacts.find((c) => c.id === a.contact_id);
-                    return `<li><div class="when"><b>${esc(activityLabel(a.type))}</b><span>${dateTime(a.happened_at)}</span>${who ? `<span>with ${esc(who.name)}</span>` : ''}
+                    return `<li><div class="when"><b>${esc(activityTitle(a))}</b><span>${dateTime(a.happened_at)}</span>${who ? `<span>with ${esc(who.name)}</span>` : ''}
                       ${admin ? `<span style="margin-left:auto"><button class="link-btn muted" data-date-activity="${a.id}">Change date</button> <button class="link-btn muted" data-del-activity="${a.id}">Delete</button></span>` : ''}</div>
                       ${a.summary ? `<p>${esc(a.summary)}</p>` : ''}</li>`;
                   })
                   .join('')}</ol>`
-              : `<p class="empty">Nothing logged yet.${admin ? ' Tap “Log visit” after you’ve been there.' : ''}</p>`
+              : `<p class="empty">Nothing logged yet.${admin ? ' Tap “Log activity” after you’ve been there.' : ''}</p>`
           }
         </section>
       </div>
@@ -139,7 +146,7 @@ export async function render(page, { params, refresh, isCurrent }) {
         ${admin ? '<button class="btn danger block" data-delete>Delete partner</button>' : ''}
       </div>
     </div>
-    ${admin ? '<button class="fab" data-log>+ Log visit</button>' : ''}`;
+    ${admin ? '<button class="fab" data-log>+ Log activity</button>' : ''}`;
 
   // ── Actions ──
   const patch = async (body, message = 'Saved') => {
@@ -176,6 +183,10 @@ export async function render(page, { params, refresh, isCurrent }) {
     }
   };
   page.querySelector('[data-reply-date]')?.addEventListener('change', (e) => setReply(e.target.value || null));
+  // Flyers: the date they were (last) left there; the server notes it in the activity history.
+  page.querySelectorAll('[data-flyers-date]').forEach((input) =>
+    input.addEventListener('change', () => input.value && patch({ [flyerKey(input.dataset.flyersDate)]: input.value }, `${input.dataset.flyersDate} flyers saved`))
+  );
 
   page.onclick = async (e) => {
     const el = e.target.closest('button');
@@ -191,6 +202,8 @@ export async function render(page, { params, refresh, isCurrent }) {
     else if (d.follow) patch({ next_follow_up: d.follow === 'clear' ? null : shiftDate(today(), Number(d.follow)) }, 'Follow-up set');
     else if (d.welcome) setWelcome(d.welcome === 'clear' ? null : today());
     else if (d.reply) setReply(d.reply === 'clear' ? null : today());
+    else if (d.flyers) patch({ [flyerKey(d.flyers)]: today() }, `${d.flyers} flyers saved`);
+    else if (d.flyersClear) patch({ [flyerKey(d.flyersClear)]: null }, 'Saved');
     else if ('followupMail' in d) followUpMail(p, refresh);
     else if ('log' in d) logActivity(p, contacts, refresh);
     else if ('planVisit' in d) planVisits(planned ?? shiftDate(today(), 1), refresh, [p.id]);
@@ -204,6 +217,11 @@ export async function render(page, { params, refresh, isCurrent }) {
   };
 
   if (showAffiliate) await renderPerformance(page, p, cur, isCurrent, refresh);
+}
+
+function flyersPill(p) {
+  const have = FLYERS.filter((size) => p[flyerKey(size)]);
+  return have.length ? `<span class="pill good" title="${esc(have.map((size) => `${size} flyers left ${shortDate(p[flyerKey(size)])}`).join(', '))}">📄 ${have.join(' + ')} flyers</span>` : '';
 }
 
 async function remove(path, done) {
@@ -358,7 +376,7 @@ function activityDate(a, refresh) {
   const d = new Date(a.happened_at);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
   const m = openModal(
-    `Change date – ${activityLabel(a.type)}`,
+    `Change date – ${activityTitle(a)}`,
     `<form>
       <label class="field"><span>When it happened</span><input class="input" type="datetime-local" name="when" value="${d.toISOString().slice(0, 16)}" max="${nowLocalInput()}" required /></label>
       <button class="btn block" type="submit">Save</button>
@@ -378,18 +396,22 @@ function activityDate(a, refresh) {
   });
 }
 
+// One window for whatever was done there: one of the standard types (Visit by default) plus any of
+// our own activity types – e.g. a visit where we also trained the staff and left flyers.
 export function logActivity(p, contacts, refresh) {
   const nextStage = p.stage === 'new' ? 'contacted' : p.stage;
   const m = openModal(
-    `Log visit – ${p.name}`,
+    `Log activity – ${p.name}`,
     `<form>
-      <div class="chips" data-type>${ACTIVITY_TYPES.map((t, i) => `<button type="button" data-v="${t.value}" aria-pressed="${i === 0}">${t.label}</button>`).join('')}</div>
+      <div class="chips wrap-chips" data-type>${ACTIVITY_TYPES.map((t, i) => `<button type="button" data-v="${t.value}" aria-pressed="${i === 0}">${t.label}</button>`).join('')}</div>
+      <div class="field" style="margin-top:12px"><span>Also done <button type="button" class="link-btn muted" style="margin-left:8px" data-manage>Edit list</button></span>
+        <div class="chips wrap-chips" data-custom></div></div>
       <div class="form-grid">
         <label class="field"><span>When</span><input class="input" type="datetime-local" name="when" value="${nowLocalInput()}" required /></label>
         <label class="field"><span>With</span><select class="input" name="contact_id">${options(contacts.map((c) => ({ value: c.id, label: c.name })), '', { empty: '–' })}</select></label>
       </div>
       <div class="chips wrap-chips" data-outcomes>${VISIT_OUTCOMES.map((o) => `<button type="button" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div>
-      <label class="field"><span>What happened</span><textarea class="input" name="summary" rows="4" placeholder="Talked to the front office manager, left flyers, she will ask the GM…"></textarea></label>
+      <label class="field"><span>What happened</span><textarea class="input" name="summary" rows="4" placeholder="Talked to the front office manager, she will ask the GM…"></textarea></label>
       <div class="form-grid">
         <label class="field"><span>Stage after this</span><select class="input" name="stage">${options(STAGES, nextStage)}</select></label>
         <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" value="${esc(p.next_follow_up ?? '')}" /></label>
@@ -400,11 +422,65 @@ export function logActivity(p, contacts, refresh) {
   );
   const form = m.el.querySelector('form');
   let type = ACTIVITY_TYPES[0].value;
+  const tags = new Set();
+  let managing = false;
+  // Flyers first (they also update the partner's flyer dates), then our own types.
+  const flyerTag = (size) => `${size} flyers left`;
+  const drawCustom = () => {
+    const own = state.activityTypes ?? [];
+    m.el.querySelector('[data-manage]').textContent = managing ? 'Done' : 'Edit list';
+    m.el.querySelector('[data-custom]').innerHTML = `${FLYERS.map((size) => `<button type="button" data-tag="${esc(flyerTag(size))}" aria-pressed="${tags.has(flyerTag(size))}">📄 Left ${size} flyers</button>`).join('')}${own
+      .map((t) =>
+        managing
+          ? `<button type="button" data-del-type="${t.id}" title="Remove from the list">${esc(t.label)} ✕</button>`
+          : `<button type="button" data-tag="${esc(t.label)}" aria-pressed="${tags.has(t.label)}">${esc(t.label)}</button>`
+      )
+      .join('')}<button type="button" data-new-type>+ New activity</button>`;
+  };
+  drawCustom();
   m.el.querySelector('[data-type]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]');
     if (!b) return;
-    type = b.dataset.v;
-    m.el.querySelectorAll('[data-type] button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    // Tapping the chosen type again unselects it, for an entry that's only "Also done" items.
+    type = type === b.dataset.v && tags.size ? 'other' : b.dataset.v;
+    m.el.querySelectorAll('[data-type] button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === type)));
+  });
+  m.el.querySelector('[data-manage]').addEventListener('click', () => {
+    managing = !managing;
+    drawCustom();
+  });
+  m.el.querySelector('[data-custom]').addEventListener('click', async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.tag) {
+      const on = !tags.has(b.dataset.tag);
+      on ? tags.add(b.dataset.tag) : tags.delete(b.dataset.tag);
+      if (!tags.size && type === 'other') type = ACTIVITY_TYPES[0].value;
+      m.el.querySelectorAll('[data-type] button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.v === type)));
+      drawCustom();
+    } else if ('newType' in b.dataset) {
+      const label = prompt('New activity, e.g. “Staff training” or “Brochure restock”:')?.trim();
+      if (!label) return;
+      try {
+        const t = await api('/api/activity-types', { method: 'POST', body: { label } });
+        if (!(state.activityTypes ??= []).some((x) => x.id === t.id)) state.activityTypes = [...state.activityTypes, t].sort((x, y) => x.label.localeCompare(y.label));
+        tags.add(t.label);
+        drawCustom();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    } else if (b.dataset.delType) {
+      const t = state.activityTypes.find((x) => x.id === b.dataset.delType);
+      if (!confirm(`Remove “${t.label}” from the list? Entries already logged keep it.`)) return;
+      try {
+        await api(`/api/activity-types?id=${t.id}`, { method: 'DELETE' });
+        state.activityTypes = state.activityTypes.filter((x) => x.id !== t.id);
+        tags.delete(t.label);
+        drawCustom();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    }
   });
   m.el.querySelector('[data-outcomes]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-o]');
@@ -422,11 +498,12 @@ export function logActivity(p, contacts, refresh) {
     const partner = {};
     if (f.stage !== p.stage) partner.stage = f.stage;
     if ((f.next_follow_up || null) !== p.next_follow_up) partner.next_follow_up = f.next_follow_up || null;
+    for (const size of FLYERS) if (tags.has(flyerTag(size))) partner[flyerKey(size)] = f.when.slice(0, 10);
     try {
       await api('/api/activities', {
         method: 'POST',
         // local_date lets the server tick off visits planned up to this (local) day
-        body: { partner_id: p.id, type, happened_at: new Date(f.when).toISOString(), local_date: f.when.slice(0, 10), contact_id: f.contact_id || null, summary: f.summary, partner },
+        body: { partner_id: p.id, type, tags: [...tags], happened_at: new Date(f.when).toISOString(), local_date: f.when.slice(0, 10), contact_id: f.contact_id || null, summary: f.summary, partner },
       });
       m.close();
       toast('Logged');
