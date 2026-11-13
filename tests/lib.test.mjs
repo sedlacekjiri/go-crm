@@ -532,3 +532,39 @@ it('activityTitle: type plus our own activities', async () => {
   assert.equal(activityTitle({ type: 'call' }), 'Call');
   assert.equal(activityTitle({ type: 'other', tags: [] }), 'Activity');
 });
+
+describe('map trips', async () => {
+  const { distanceKm, distanceText, routeOrder, routeKm, nearbyPlaces, directionsUrl } = await import('../public/js/lib.js');
+  // Downtown Reykjavík: Hallgrímskirkja, Harpa, and a hotel near each; one far away in Keflavík.
+  const church = { id: 'a', name: 'A', lat: 64.1417, lng: -21.9266, stage: 'new' };
+  const harpa = { id: 'b', name: 'B', lat: 64.1504, lng: -21.9325, stage: 'contacted' };
+  const nearHarpa = { id: 'c', name: 'C', lat: 64.1490, lng: -21.9370, stage: 'new' };
+  const keflavik = { id: 'd', name: 'D', lat: 64.0, lng: -22.56, stage: 'new' };
+  const declined = { id: 'e', name: 'E', lat: 64.1500, lng: -21.9330, stage: 'declined' };
+  const noPin = { id: 'f', name: 'F', stage: 'new' };
+
+  it('measures distances', () => {
+    assert.ok(Math.abs(distanceKm(church, harpa) - 1.0) < 0.15);
+    assert.equal(distanceText(0.234), '230 m');
+    assert.equal(distanceText(2.345), '2.3 km');
+    assert.equal(distanceText(34.5), '35 km');
+  });
+  it('orders a route by nearest next stop', () => {
+    assert.deepEqual(routeOrder([church, keflavik, nearHarpa, harpa, noPin]).map((s) => s.id), ['a', 'c', 'b', 'd']);
+    assert.ok(routeKm([church, harpa]) > 0.9);
+    assert.deepEqual(routeOrder([]), []);
+  });
+  it('suggests nearby places, skipping declined, far and freshly visited ones', () => {
+    const all = [church, harpa, nearHarpa, keflavik, declined, noPin];
+    assert.deepEqual(nearbyPlaces(all, [harpa], { day: '2026-11-13' }).map((x) => x.partner.id), ['c', 'a']);
+    const visits = new Map([['c', { count: 1, last: '2026-11-10T10:00:00Z' }]]);
+    assert.deepEqual(nearbyPlaces(all, [harpa], { day: '2026-11-13', visits }).map((x) => x.partner.id), ['a']);
+    assert.deepEqual(nearbyPlaces(all, [noPin]), []);
+  });
+  it('builds Google directions through the stops', () => {
+    const url = directionsUrl([{ name: 'Hotel Borg', address: 'Pósthússtræti 11' }, { name: 'KEX' }]);
+    assert.ok(url.includes('destination=KEX%2C%20Iceland'));
+    assert.ok(url.includes('waypoints=Hotel%20Borg%2C%20P%C3%B3sth%C3%BAsstr%C3%A6ti%2011%2C%20Iceland'));
+    assert.equal(directionsUrl([]), null);
+  });
+});

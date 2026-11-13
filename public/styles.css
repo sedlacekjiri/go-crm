@@ -1349,3 +1349,35 @@ dl.details .maps-go { display: inline-block; margin-left: 8px; font-size: 12px; 
 }
 .report-kpis { display: flex; flex-wrap: wrap; }
 .report-kpis .kpi { flex: 1 1 220px; min-width: 0; }
+
+/* ── Map ───────────────────────────────── */
+.map-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.map-box { height: calc(100vh - 230px); min-height: 440px; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); background: var(--surface); position: relative; z-index: 0; }
+.map-box img { max-width: none; }
+.map-box .leaflet-tile-pane { filter: saturate(0.6) brightness(1.03); }
+.map-box.dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.5); }
+.map-box.placing, .map-box.placing .leaflet-interactive { cursor: crosshair; }
+.map-box .leaflet-popup-content-wrapper, .map-box .leaflet-popup-tip { background: var(--surface); color: var(--text); }
+.map-box .leaflet-popup-content { margin: 12px 14px; font: inherit; }
+.map-pop b { font-size: 14px; }
+.map-pop > div { margin-top: 3px; }
+.map-pop .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.map-pop .acts .btn { color: inherit; }
+.map-pop .acts .btn:not(.secondary) { color: #fff; }
+.trip-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
+.chips .dot, .trip-near .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.trip { position: sticky; top: 76px; max-height: calc(100vh - 100px); overflow: auto; }
+.trip-stops, .trip-near, .trip-missing ul { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 8px; }
+.trip-stops li, .trip-near li { display: flex; align-items: center; gap: 10px; }
+.trip-stops .n { flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; }
+.trip-stops .body, .trip-near .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.trip-stops .body a, .trip-near .body .link-btn { font-weight: 600; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trip-sub { font-size: 13px; margin: 16px 0 0; }
+.trip-acts { display: grid; gap: 8px; margin-top: 14px; }
+.trip-missing { margin-top: 16px; font-size: 13px; }
+.trip-missing summary { cursor: pointer; color: var(--text-2); }
+@media (max-width: 900px) {
+  .map-layout { grid-template-columns: 1fr; }
+  .map-box { height: 60vh; min-height: 320px; }
+  .trip { position: static; max-height: none; }
+}

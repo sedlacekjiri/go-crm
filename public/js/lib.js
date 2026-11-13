@@ -1403,3 +1403,57 @@ export function reportPlaces(reviews, from) {
     return { name: p.name, rating: p.rating, total: p.rating_count, gained: base ? p.rating_count - base.rating_count : null };
   });
 }
+
+// ── Map & visit trips ──────────────────────────────────────────
+export const hasPin = (p) => p?.lat != null && p?.lng != null;
+
+// Straight-line distance in km.
+export function distanceKm(a, b) {
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+export const distanceText = (km) => (km < 1 ? `${Math.max(10, Math.round(km * 100) * 10)} m` : `${km.toFixed(km < 10 ? 1 : 0)} km`);
+
+// A sensible order to visit the stops: start with the first, then always the nearest one left.
+export function routeOrder(stops) {
+  const left = stops.filter(hasPin);
+  if (!left.length) return [];
+  const out = [left.shift()];
+  while (left.length) {
+    const last = out[out.length - 1];
+    let best = 0;
+    for (let i = 1; i < left.length; i++) if (distanceKm(last, left[i]) < distanceKm(last, left[best])) best = i;
+    out.push(left.splice(best, 1)[0]);
+  }
+  return out;
+}
+
+export const routeKm = (stops) => stops.slice(1).reduce((sum, s, i) => sum + distanceKm(stops[i], s), 0);
+
+// Places worth adding to a trip: within maxKm of any stop, not declined, not already in it and not
+// visited in the last `freshDays` days. Nearest first.
+export function nearbyPlaces(partners, stops, { maxKm = 1.5, limit = 8, freshDays = 14, visits = new Map(), day = today() } = {}) {
+  const pinned = stops.filter(hasPin);
+  if (!pinned.length) return [];
+  const inTrip = new Set(stops.map((s) => s.id));
+  const since = shiftDate(day, -freshDays);
+  return partners
+    .filter((p) => hasPin(p) && !inTrip.has(p.id) && p.stage !== 'declined' && !((visits.get(p.id)?.last ?? '').slice(0, 10) >= since))
+    .map((p) => ({ partner: p, km: Math.min(...pinned.map((s) => distanceKm(s, p))) }))
+    .filter((x) => x.km <= maxKm)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit);
+}
+
+// Google Maps directions from where you are through the stops, in this order (Google takes up to
+// 9 stops before the last one).
+export function directionsUrl(stops) {
+  const at = (p) => encodeURIComponent([p.name, p.address, 'Iceland'].filter(Boolean).join(', '));
+  if (!stops.length) return null;
+  const before = stops.slice(0, -1).slice(0, 9);
+  return `https://www.google.com/maps/dir/?api=1&destination=${at(stops[stops.length - 1])}${before.length ? `&waypoints=${before.map(at).join('%7C')}` : ''}`;
+}

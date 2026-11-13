@@ -28,6 +28,22 @@ export async function searchPlaces(key, query) {
   }));
 }
 
+// Where a place is (for the map): the best Google match inside Iceland, or null.
+export async function locatePlace(key, query) {
+  const data = await call(`${API}/places:searchText`, key, 'places.location,places.formattedAddress', {
+    method: 'POST',
+    body: JSON.stringify({
+      textQuery: query,
+      languageCode: 'en',
+      regionCode: 'IS',
+      pageSize: 1,
+      locationRestriction: { rectangle: { low: { latitude: 63.2, longitude: -24.6 }, high: { latitude: 66.6, longitude: -13.4 } } },
+    }),
+  });
+  const p = data.places?.[0];
+  return p?.location ? { lat: p.location.latitude, lng: p.location.longitude, address: p.formattedAddress?.replace(/,\s*Iceland$/, '') ?? null } : null;
+}
+
 export async function fetchPlace(key, placeId) {
   return call(`${API}/places/${encodeURIComponent(placeId)}?languageCode=en`, key, 'id,displayName,formattedAddress,googleMapsUri,rating,userRatingCount,reviews');
 }

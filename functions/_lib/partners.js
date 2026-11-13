@@ -40,6 +40,8 @@ export async function savePartner(db, body, { visitLogged = false, flyersLogged 
     if (key in body) row[key] = clean(body[key]);
   }
   if (!row.name) return { error: 'Name is required', status: 400 };
+  // A new name or address means the map pin has to be looked up again.
+  if (existing && (row.name !== existing.name || row.address !== existing.address)) row.lat = row.lng = row.geo_status = null;
   if (row.stage === 'accepted' && !row.accepted_at) row.accepted_at = now().slice(0, 10);
   row.updated_at = now();
 

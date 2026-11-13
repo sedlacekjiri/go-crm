@@ -1,7 +1,7 @@
 // Tasks & calendar: partner visits, to-dos with deadlines, follow-ups and marketing posts – split into
 // Sales and Marketing. A planned visit is ticked off automatically when the visit is logged.
 import { avatar, channelTags, onSeg, pageHeader, seg, stageBadge } from '../components.js';
-import { agenda, AREAS, eventTimeText, laterItems, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nextPlannedVisit, overdue, PARTNER_TYPES, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, typeLabel, visitStats, weekDays } from '../lib.js';
+import { agenda, AREAS, distanceText, eventTimeText, laterItems, daysLeft, subtaskProgress, dayCounts, monthGrid, monthOf, nearbyPlaces, nextPlannedVisit, overdue, PARTNER_TYPES, postStatusLabel, shiftDate, shiftMonth, STAGES, TASK_CATEGORIES, today, typeLabel, visitStats, weekDays } from '../lib.js';
 import { commentChip, commentsHtml, mountComments } from '../comments.js';
 import { fileCount, filesFieldHtml, mountFiles } from '../files.js';
 import { assigneeFieldHtml, mountAssignee, subAssigneeSelect, subPerson } from '../people.js';
@@ -540,7 +540,9 @@ export function planVisits(date, refresh, preselect = []) {
       <div class="chips wrap-chips" data-stages>${STAGES.filter((s) => s.value !== 'declined')
         .map((s) => `<button type="button" data-s="${s.value}" aria-pressed="${filter.stages.has(s.value)}">${s.label}</button>`)
         .join('')}</div>
+      <div class="pick-near" data-near></div>
       <div class="pick-list" data-list></div>
+      <p class="muted small" style="margin:0">Plan by distance instead? <a href="#/map">Open the map</a></p>
       <button class="btn block" type="submit" data-submit>Plan visits</button>
     </form>`
   );
@@ -569,6 +571,19 @@ export function planVisits(date, refresh, preselect = []) {
       : '<p class="empty">No partners match.</p>';
     updateButton();
   };
+  // Places near the ones ticked (any stage except declined, not visited in the last 2 weeks).
+  const drawNear = () => {
+    const picked = [...chosen].map((id) => state.partners.find((p) => p.id === id)).filter(Boolean);
+    const near = nearbyPlaces(state.partners, picked, { visits, day: form.date.value || today(), limit: 6 });
+    m.el.querySelector('[data-near]').innerHTML = near.length
+      ? `<div class="pick-area">📍 Close to the places you picked</div>${near
+          .map(
+            ({ partner: p, km }) => `<label class="pick"><input type="checkbox" value="${p.id}" ${chosen.has(p.id) ? 'checked' : ''} />
+              <span class="body"><b>${esc(p.name)}</b><span class="meta">${distanceText(km)} away · ${esc(typeLabel(p.type))} · ${esc(STAGES.find((s) => s.value === p.stage).label)}</span></span></label>`
+          )
+          .join('')}`
+      : '';
+  };
   const updateButton = () => {
     const btn = m.el.querySelector('[data-submit]');
     btn.textContent = chosen.size ? `Plan ${chosen.size} visit${chosen.size === 1 ? '' : 's'}` : 'Plan visits';
@@ -576,10 +591,16 @@ export function planVisits(date, refresh, preselect = []) {
   };
   draw();
 
-  // Ticking a place only updates the button, so the list keeps its scroll position.
-  m.el.querySelector('[data-list]').addEventListener('change', (e) => {
+  drawNear();
+  m.el.querySelector('a[href="#/map"]').addEventListener('click', () => m.close());
+
+  // Ticking a place only updates the button and the nearby places, so the list keeps its scroll position.
+  m.el.addEventListener('change', (e) => {
+    if (!e.target.matches('[data-list] input, [data-near] input')) return;
     if (e.target.checked) chosen.add(e.target.value);
     else chosen.delete(e.target.value);
+    m.el.querySelectorAll(`[data-list] input[value="${e.target.value}"]`).forEach((x) => (x.checked = e.target.checked));
+    drawNear();
     updateButton();
   });
   m.el.querySelector('[data-types]').addEventListener('click', (e) => {

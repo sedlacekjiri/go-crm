@@ -129,7 +129,8 @@ export async function render(page, { params, refresh, isCurrent }) {
               [
                 'Address',
                 `<a href="${maps.open}" target="_blank" rel="noreferrer">${p.address ? esc(p.address) : 'Find on Google Maps'}</a>
-                 <a class="maps-go" href="${maps.directions}" target="_blank" rel="noreferrer">Directions ↗</a>`,
+                 <a class="maps-go" href="${maps.directions}" target="_blank" rel="noreferrer">Directions ↗</a>
+                 ${p.lat != null ? `<a class="maps-go" href="#/map?focus=${p.id}">On our map</a>` : ''}`,
               ],
               ['Phone', p.phone && `<a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>`],
               ['E-mail', p.email && `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>`],

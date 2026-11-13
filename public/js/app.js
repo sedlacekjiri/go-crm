@@ -20,6 +20,7 @@ import * as marketing from './views/marketing.js';
 import * as collaborators from './views/collaborators.js';
 import * as report from './views/report.js';
 import * as library from './views/library.js';
+import * as mapView from './views/map.js';
 
 // Menu in groups: general on top, then Sales (just for you) and Marketing.
 // `group` is also what colleagues get access to (Team → sections).
@@ -27,6 +28,7 @@ const NAV = [
   { href: '#/', key: 'home', label: 'Home', icon: ICONS.home, group: '' },
   { href: '#/tasks', key: 'tasks', label: 'Tasks', icon: ICONS.tasks, group: '' },
   { href: '#/partners', key: 'partners', label: 'Partners', icon: ICONS.partners, group: 'Sales' },
+  { href: '#/map', key: 'map', label: 'Map', icon: ICONS.map, group: 'Sales' },
   { href: '#/tasks?tab=calendar&cat=sales', key: 'calendar', label: 'Calendar', icon: ICONS.calendar, group: 'Sales' },
   { href: '#/pipeline', key: 'pipeline', label: 'Pipeline', icon: ICONS.pipeline, group: 'Sales' },
   { href: '#/sales', key: 'sales', label: 'Sales', icon: ICONS.sales, group: 'Sales' },
@@ -67,6 +69,7 @@ const ROUTES = [
   { re: /^\/report$/, nav: 'report', view: report },
   { re: /^\/files$/, nav: 'files', view: library },
   { re: /^\/pipeline$/, nav: 'pipeline', view: pipeline },
+  { re: /^\/map$/, nav: 'map', view: mapView },
   { re: /^\/sales$/, nav: 'sales', view: sales },
   { re: /^\/sales\/import$/, nav: 'sales', view: importView },
   { re: /^\/goals$/, nav: 'goals', view: goals },

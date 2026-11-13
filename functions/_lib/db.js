@@ -535,6 +535,10 @@ const MIGRATIONS = [
   `ALTER TABLE partners ADD COLUMN flyers_a4 TEXT`, // date our A4 flyers were last left there
   `ALTER TABLE partners ADD COLUMN flyers_a5 TEXT`, // same for A5
   `ALTER TABLE activities ADD COLUMN tags TEXT`, // JSON labels of our own activity types done with it
+  // Map pin, found via Google Places from name + address (geo_status: ok / notfound / manual).
+  `ALTER TABLE partners ADD COLUMN lat REAL`,
+  `ALTER TABLE partners ADD COLUMN lng REAL`,
+  `ALTER TABLE partners ADD COLUMN geo_status TEXT`,
 ];
 
 let schemaReady = false;
