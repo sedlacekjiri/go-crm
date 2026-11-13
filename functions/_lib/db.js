@@ -539,6 +539,7 @@ const MIGRATIONS = [
   `ALTER TABLE partners ADD COLUMN lat REAL`,
   `ALTER TABLE partners ADD COLUMN lng REAL`,
   `ALTER TABLE partners ADD COLUMN geo_status TEXT`,
+  `ALTER TABLE posts ADD COLUMN published_by TEXT`, // who marked it published
 ];
 
 let schemaReady = false;

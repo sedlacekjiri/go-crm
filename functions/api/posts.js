@@ -57,8 +57,12 @@ export async function onRequestPost({ request, env }) {
   }
   if (!row.title) return bad('Give it a short title');
   // Remember when it actually went live (the planned publish_date can be different).
-  if (row.status === 'published' && !row.published_at) row.published_at = now();
-  if (row.status !== 'published') row.published_at = null;
+  // And who did it, so the team sees it in Tasks → Done.
+  if (row.status === 'published' && !row.published_at) {
+    row.published_at = now();
+    row.published_by = auth.user?.id ?? null;
+  }
+  if (row.status !== 'published') row.published_at = row.published_by = null;
   if (row.status !== 'idea' && !row.publish_date) return bad('Choose a publish date (or keep it as an idea)');
   row.updated_at = now();
 
@@ -76,6 +80,7 @@ export async function onRequestPost({ request, env }) {
       deadline: row.deadline ? shift(d, dayDiff(row.publish_date, row.deadline)) : null,
       status: row.status === 'published' ? 'scheduled' : row.status,
       published_at: null,
+      published_by: null,
       post_url: null,
     })),
   ];
