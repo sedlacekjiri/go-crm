@@ -83,7 +83,7 @@ export async function render(page, { query, refresh, isCurrent }) {
       `${pinned.length} of ${state.partners.length} partners on the map${missing.length ? ` · ${missing.length} not looked up yet` : ''}`,
       admin && missing.length ? `<button class="btn secondary" data-locate>Find ${missing.length} on the map</button>` : ''
     )}
-    <div class="filters">
+    <div class="map-filters">
       <div class="chips wrap-chips type-chips" data-types>${[{ value: '', label: 'All types' }, ...PARTNER_TYPES.filter((t) => state.partners.some((p) => p.type === t.value))]
         .map((t) => `<button type="button" data-t="${t.value}" aria-pressed="${view.type === t.value}">${t.value ? `<i class="type-ico">${typeIcon(t.value)}</i>` : ''}${t.label}</button>`)
         .join('')}</div>
@@ -161,17 +161,17 @@ export async function render(page, { query, refresh, isCurrent }) {
       if (!hasPin(p) || (!shown(p) && !order.has(p.id))) continue;
       const n = order.get(p.id);
       const m = n
-        ? L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'trip-pin', html: `<span style="background:${color(p.stage)}">${n}</span>`, iconSize: [26, 26] }), zIndexOffset: 1000 })
+        ? L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'trip-pin', html: `<span style="background:${color(p.stage)}">${n}</span>`, iconSize: [32, 32] }), zIndexOffset: 1000 })
         : L.marker([p.lat, p.lng], {
             icon: L.divIcon({
               className: 'type-pin-wrap',
               html: `<span class="type-pin${near.has(p.id) ? ' near' : ''}${p.stage === 'on_hold' ? ' hold' : ''}" style="--c:${color(p.stage)}">${typeIcon(p.type)}</span>`,
-              iconSize: [26, 26],
+              iconSize: [32, 32],
             }),
             zIndexOffset: near.has(p.id) ? 500 : 0,
           });
-      m.bindPopup(() => popup(p), { minWidth: 220, offset: [0, -8] });
-      m.bindTooltip(esc(p.name), { direction: 'top', offset: [0, -14] });
+      m.bindPopup(() => popup(p), { minWidth: 220, offset: [0, -10] });
+      m.bindTooltip(esc(p.name), { direction: 'top', offset: [0, -17] });
       m.addTo(layer);
       markers.set(p.id, m);
     }
