@@ -160,12 +160,12 @@ export function render(page, ctx) {
     </li>`;
 
   const followRow = (p, showDate = false, onDate = selected) => `<li class="task">
-      <span class="tick follow" aria-hidden="true">↻</span>
+      ${admin ? `<button type="button" class="tick follow" data-follow-done="${p.id}" aria-label="Mark done – log the e-mail" title="Done – log the e-mail">↻</button>` : '<span class="tick follow" aria-hidden="true">↻</span>'}
       <div class="body">
         <a class="title" href="#/partner/${p.id}">Follow up: ${esc(p.name)}</a>
         <div class="meta">${showDate ? `<span class="due late">${shortDate(p.next_follow_up)}</span>` : ''}${esc(p.area ?? '')} ${stageBadge(p.stage)}</div>
       </div>
-      ${admin ? `<div class="acts"><button class="btn secondary sm" data-plan-one="${p.id}" data-plan-date="${onDate}">Plan visit ${onDate === t ? 'today' : shortDate(onDate)}</button></div>` : ''}
+      ${admin ? `<div class="acts"><button class="btn secondary sm" data-follow-done="${p.id}">✉ E-mail sent</button><button class="btn secondary sm" data-plan-one="${p.id}" data-plan-date="${onDate}">Plan visit ${onDate === t ? 'today' : shortDate(onDate)}</button></div>` : ''}
     </li>`;
 
   const tab = ['notes', 'done', 'calendar'].includes(ctx.query.get('tab')) ? ctx.query.get('tab') : 'list';
@@ -400,6 +400,10 @@ export function render(page, ctx) {
     else if (d.log) {
       const p = state.partners.find((x) => x.id === d.log);
       logActivity(p, state.contacts.filter((c) => c.partner_id === p.id), ctx.refresh);
+    } else if (d.followDone) {
+      // Sent the follow-up e-mail: log it, which also ticks the follow-up off.
+      const p = state.partners.find((x) => x.id === d.followDone);
+      logActivity(p, state.contacts.filter((c) => c.partner_id === p.id), ctx.refresh, { type: 'followup' });
     } else if (d.toggle) {
       const task = state.tasks.find((x) => x.id === d.toggle);
       save({ id: task.id, done: !task.done }, task.done ? 'Not done' : 'Done ✓', ctx.refresh);

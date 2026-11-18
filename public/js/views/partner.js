@@ -399,12 +399,14 @@ function activityDate(a, refresh) {
 
 // One window for whatever was done there: one of the standard types (Visit by default) plus any of
 // our own activity types – e.g. a visit where we also trained the staff and left flyers.
-export function logActivity(p, contacts, refresh) {
+// A follow-up due by today counts as done with it: its date starts empty, ready for the next one.
+export function logActivity(p, contacts, refresh, { type: firstType = ACTIVITY_TYPES[0].value } = {}) {
   const nextStage = p.stage === 'new' ? 'contacted' : p.stage;
+  const followDue = p.next_follow_up && p.next_follow_up <= today();
   const m = openModal(
     `Log activity – ${p.name}`,
     `<form>
-      <div class="chips wrap-chips" data-type>${ACTIVITY_TYPES.map((t, i) => `<button type="button" data-v="${t.value}" aria-pressed="${i === 0}">${t.label}</button>`).join('')}</div>
+      <div class="chips wrap-chips" data-type>${ACTIVITY_TYPES.map((t) => `<button type="button" data-v="${t.value}" aria-pressed="${t.value === firstType}">${t.label}</button>`).join('')}</div>
       <div class="field" style="margin-top:12px"><span>Also done <button type="button" class="link-btn muted" style="margin-left:8px" data-manage>Edit list</button></span>
         <div class="chips wrap-chips" data-custom></div></div>
       <div class="form-grid">
@@ -415,14 +417,15 @@ export function logActivity(p, contacts, refresh) {
       <label class="field"><span>What happened</span><textarea class="input" name="summary" rows="4" placeholder="Talked to the front office manager, she will ask the GM…"></textarea></label>
       <div class="form-grid">
         <label class="field"><span>Stage after this</span><select class="input" name="stage">${options(STAGES, nextStage)}</select></label>
-        <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" value="${esc(p.next_follow_up ?? '')}" /></label>
+        <label class="field"><span>Next follow-up</span><input class="input" type="date" name="next_follow_up" value="${esc(followDue ? '' : (p.next_follow_up ?? ''))}" /></label>
       </div>
+      ${followDue ? `<p class="muted small" style="margin:-4px 0 8px">✓ The follow-up from ${esc(shortDate(p.next_follow_up))} is done with this – pick a date for the next one if you want.</p>` : ''}
       <div class="chips">${FOLLOW_UPS.map((f) => `<button type="button" data-days="${f.days}">${f.label}</button>`).join('')}</div>
       <button class="btn block" type="submit">Save</button>
     </form>`
   );
   const form = m.el.querySelector('form');
-  let type = ACTIVITY_TYPES[0].value;
+  let type = firstType;
   const tags = new Set();
   let managing = false;
   // Flyers first (they also update the partner's flyer dates), then our own types.
